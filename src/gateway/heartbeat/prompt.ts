@@ -5,6 +5,7 @@ import { dexterPath } from '../../utils/paths.js';
 const HEARTBEAT_MD_PATH = dexterPath('HEARTBEAT.md');
 
 const DEFAULT_CHECKLIST = `- Major index moves (S&P 500, NASDAQ, Dow) — alert if any move more than 2% in a session
+- Major China A-share index moves (上证综指, 沪深300, 创业板指) — alert if any move more than 2% in a session
 - Breaking financial news — major earnings surprises, Fed announcements, significant market events`;
 
 /**

@@ -31,6 +31,9 @@ Intelligent meta-tool for retrieving market data including prices, news, and ins
 - Institutional holdings (SEC 13F — who holds a security, what a filer holds)
 - Beneficial ownership and activist stakes (SEC 13D/13G — 5%+ owners, activist positions)
 - Price move explanations ("why did X go up/down" → combines price + news)
+- China A-share domestic index snapshots (上证综指, 深证成指, 创业板指, 沪深300, 中证500, 科创50, 中证1000, 上证50, 上证180)
+- Major China A-share index overviews ("今天大盘怎么样")
+- Historical China A-share domestic index prices (daily/weekly/monthly K-line)
 
 ## When NOT to Use
 
@@ -62,6 +65,7 @@ import { createGetInsiderTrades, getInsiderNames } from './insider_trades.js';
 import { getInsiderOwnership } from './insider_ownership.js';
 import { getInstitutionalHoldings } from './institutional_holdings.js';
 import { getBeneficialOwnership } from './beneficial_ownership.js';
+import { getIndexSnapshot, getIndexSnapshots, getIndexPrices } from './domestic-index.js';
 
 // All market data tools available for routing. Built per-instance because
 // get_insider_trades needs the model for its LLM name-resolution fallback.
@@ -82,6 +86,10 @@ function buildMarketDataTools(model: string): StructuredToolInterface[] {
     getInsiderOwnership,
     getInstitutionalHoldings,
     getBeneficialOwnership,
+    // China A-share Domestic Indices
+    getIndexSnapshot,
+    getIndexSnapshots,
+    getIndexPrices,
   ];
 }
 
@@ -123,6 +131,10 @@ Given a user's natural language query about market data, call the appropriate to
    - For a specific activist's or 5%+ owner's stakes across companies (Saba, Elliott, Icahn, etc.) → get_beneficial_ownership with filer_name (resolves name → CIK internally)
    - For "why did X go up/down" → combine get_stock_price + get_company_news
    - For "what's happening in the markets" → get_company_news without ticker
+   - For a single China A-share domestic index quote (上证综指, 深证成指, 沪深300, 中证500, 科创50, 中证1000, etc.) → get_index_snapshot
+   - For "今天A股主要指数 / 大盘概览" or an overview of major China indices → get_index_snapshots
+   - For China domestic index history, trend or range performance (日/周/月 K线) → get_index_prices
+   - A-share / China domestic indices MUST use the get_index_* tools, NEVER get_stock_price (which only covers US equities).
 
 4. **Efficiency**:
    - For current/latest price, use snapshot tools (not historical with limit 1)
@@ -149,6 +161,7 @@ export function createGetMarketData(model: string): DynamicStructuredTool {
     description: `Intelligent meta-tool for retrieving market data including prices, news, and insider activity. Takes a natural language query and automatically routes to appropriate market data tools. Use for:
 - Current and historical stock prices
 - Current and historical cryptocurrency prices
+- China A-share domestic index quotes and historical prices
 - Stock and crypto ticker lookup
 - Company news and recent headlines
 - Broad market news (omit ticker)

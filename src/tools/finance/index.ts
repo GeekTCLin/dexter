@@ -3,6 +3,7 @@ export { getFilings, get10KFilingItems, get10QFilingItems, get8KFilingItems } fr
 export { getKeyRatios, getHistoricalKeyRatios } from './key-ratios.js';
 export { getFinancialSegments } from './segments.js';
 export { getStockPrice, getStockPrices, getStockTickers, STOCK_PRICE_DESCRIPTION } from './stock-price.js';
+export { getIndexSnapshot, getIndexSnapshots, getIndexPrices } from './domestic-index.js';
 export { getCryptoPriceSnapshot, getCryptoPrices, getCryptoTickers } from './crypto.js';
 export { createGetInsiderTrades, getInsiderNames } from './insider_trades.js';
 export { getInsiderOwnership } from './insider_ownership.js';

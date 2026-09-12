@@ -44,6 +44,30 @@ function fmtRatio(n: unknown): string {
   return num.toFixed(1);
 }
 
+// Domestic (A-share) index values are already in real units: prices are index
+// points and percentages are pre-scaled (e.g. -1.18 means -1.18%). The US
+// helpers above must not be used — fmtPct multiplies by 100 and fmtPrice
+// prepends "$".
+function fmtIndexPoints(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (isNaN(num)) return '—';
+  return num.toFixed(2);
+}
+
+function fmtIndexPct(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (isNaN(num)) return '—';
+  return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
+}
+
+function fmtIndexVolume(n: unknown): string {
+  // Index volume (手) and amount (元) can be very large; reuse fmtNum's
+  // magnitude style (K/M/B/T) for compactness.
+  return fmtNum(n);
+}
+
 function fmtDate(d: unknown): string {
   if (!d) return '—';
   const str = String(d);
@@ -410,6 +434,77 @@ function formatLabel(s: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Domestic index (A-share) formatters
+// ---------------------------------------------------------------------------
+
+// Accepts either the snapshot itself or an envelope like `{ snapshot: {...} }`.
+function pickSnapshot(data: unknown): Rec {
+  const rec = (data && typeof data === 'object') ? data as Rec : {};
+  const nested = rec.snapshot;
+  return (nested && typeof nested === 'object') ? nested as Rec : rec;
+}
+
+// Accepts the array itself, `{ snapshots: [...] }`, or any `{ <key>: [...] }`.
+function pickIndexArray(data: unknown, preferredKey: string): unknown[] {
+  if (Array.isArray(data)) return data;
+  const rec = (data && typeof data === 'object') ? data as Rec : {};
+  const preferred = rec[preferredKey];
+  if (Array.isArray(preferred)) return preferred;
+  const firstArray = Object.values(rec).find((value) => Array.isArray(value));
+  return Array.isArray(firstArray) ? firstArray : [];
+}
+
+export function formatIndexSnapshot(data: unknown, args?: Rec): string {
+  const d = pickSnapshot(data);
+  if (Object.keys(d).length === 0) return 'No index snapshot available.';
+  const name = d.name ?? args?.symbol ?? '—';
+  const lines = [
+    `名称: ${name}`,
+    `代码: ${d.symbol ?? '—'}`,
+    `最新: ${fmtIndexPoints(d.price)}`,
+    `涨跌: ${fmtIndexPoints(d.change)}`,
+    `涨跌幅: ${fmtIndexPct(d.changePercent)}`,
+    `开盘: ${fmtIndexPoints(d.open)}`,
+    `最高: ${fmtIndexPoints(d.high)}`,
+    `最低: ${fmtIndexPoints(d.low)}`,
+    `昨收: ${fmtIndexPoints(d.prevClose)}`,
+    `成交额: ${fmtIndexVolume(d.amount)}`,
+    `数据源: ${d.source ?? '—'}`,
+  ];
+  return lines.join('\n');
+}
+
+export function formatIndexSnapshots(data: unknown, _args?: Rec): string {
+  const items = pickIndexArray(data, 'snapshots');
+  if (items.length === 0) return 'No index snapshots available.';
+  const lines = ['Index Snapshots', ''];
+  lines.push('| 指数 | 代码 | 最新 | 涨跌 | 涨跌幅 | 开盘 | 最高 | 最低 | 成交额 |');
+  lines.push('|------|------|------|------|--------|------|------|------|--------|');
+  for (const item of items as Rec[]) {
+    lines.push(`| ${item.name ?? '—'} | ${item.symbol ?? '—'} | ${fmtIndexPoints(item.price)} | ${fmtIndexPoints(item.change)} | ${fmtIndexPct(item.changePercent)} | ${fmtIndexPoints(item.open)} | ${fmtIndexPoints(item.high)} | ${fmtIndexPoints(item.low)} | ${fmtIndexVolume(item.amount)} |`);
+  }
+  return lines.join('\n');
+}
+
+const MAX_INDEX_BAR_ROWS = 60;
+
+export function formatIndexBars(data: unknown, _args?: Rec): string {
+  const rows = pickIndexArray(data, 'bars');
+  if (rows.length === 0) return 'No index price history available.';
+  const shown = (rows as Rec[]).slice(-MAX_INDEX_BAR_ROWS);
+  const lines = ['Index Price History', ''];
+  lines.push('| 日期 | 开盘 | 收盘 | 最高 | 最低 | 涨跌幅 | 成交量 |');
+  lines.push('|------|------|------|------|------|--------|--------|');
+  for (const row of shown) {
+    lines.push(`| ${row.date ?? '—'} | ${fmtIndexPoints(row.open)} | ${fmtIndexPoints(row.close)} | ${fmtIndexPoints(row.high)} | ${fmtIndexPoints(row.low)} | ${fmtIndexPct(row.changePercent)} | ${fmtIndexVolume(row.volume)} |`);
+  }
+  if (rows.length > MAX_INDEX_BAR_ROWS) {
+    lines.push('', `(showing most recent ${MAX_INDEX_BAR_ROWS} of ${rows.length} rows)`);
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Formatter registry — maps sub-tool names to formatters
 // ---------------------------------------------------------------------------
 
@@ -435,4 +530,7 @@ export const MARKET_DATA_FORMATTERS: Record<string, (data: unknown, args?: Rec) 
   get_insider_ownership: formatInsiderOwnership,
   get_institutional_holdings: formatInstitutionalHoldings,
   get_beneficial_ownership: formatBeneficialOwnership,
+  get_index_snapshot: formatIndexSnapshot,
+  get_index_snapshots: formatIndexSnapshots,
+  get_index_prices: formatIndexBars,
 };
