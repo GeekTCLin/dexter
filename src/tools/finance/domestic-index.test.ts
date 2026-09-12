@@ -103,13 +103,26 @@ describe('getIndexSnapshot', () => {
 });
 
 describe('getIndexSnapshots', () => {
-  test('parses the Eastmoney batch field map (f2/f3/f4/f12/f13/f14)', async () => {
+  test('parses the Eastmoney batch field map (f2/f3/f4/f5/f6/f12..f18)', async () => {
     handler = () =>
       jsonResponse({
         rc: 0,
         data: {
           diff: [
-            { f12: '000001', f13: 1, f14: '上证指数', f2: 3888.11, f3: -1.18, f4: -46.29 },
+            {
+              f12: '000001',
+              f13: 1,
+              f14: '上证指数',
+              f2: 3888.11,
+              f3: -1.18,
+              f4: -46.29,
+              f5: 579123145,
+              f6: 958186336970.1,
+              f15: 3912.32,
+              f16: 3852.03,
+              f17: 3910.92,
+              f18: 3934.4,
+            },
             { f12: '000300', f13: 1, f14: '沪深300', f2: 4500.5, f3: 0.85, f4: 38.1 },
           ],
         },
@@ -124,6 +137,12 @@ describe('getIndexSnapshots', () => {
     expect(first?.change).toBe(-46.29);
     expect(first?.changePercent).toBe(-1.18);
     expect(first?.name).toBe('上证指数');
+    expect(first?.open).toBe(3910.92);
+    expect(first?.high).toBe(3912.32);
+    expect(first?.low).toBe(3852.03);
+    expect(first?.prevClose).toBe(3934.4);
+    expect(first?.volume).toBe(579123145);
+    expect(first?.amount).toBe(958186336970.1);
     const second = result.value.find((s) => s.symbol === '000300.SH');
     expect(second?.price).toBe(4500.5);
     expect(second?.changePercent).toBe(0.85);
@@ -197,6 +216,8 @@ describe('provider fallback', () => {
     expect(result.value.price).toBe(3100);
     expect(result.value.change).toBe(50);
     expect(result.value.changePercent).toBe(1.64);
+    // Tencent turnover (fields[37]) is in 万元 and must be normalized to 元 (×10000).
+    expect(result.value.amount).toBe(9_999_990_000);
     expect(requestedUrls.some((u) => u.includes('qt.gtimg.cn'))).toBe(true);
   });
 });

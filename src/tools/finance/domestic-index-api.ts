@@ -71,7 +71,7 @@ const DEFAULT_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 const EM_SNAPSHOT_FIELDS = 'f43,f44,f45,f46,f47,f48,f57,f58,f60,f86,f169,f170,f171';
-const EM_BATCH_FIELDS = 'f12,f13,f14,f2,f3,f4';
+const EM_BATCH_FIELDS = 'f12,f13,f14,f2,f3,f4,f5,f6,f15,f16,f17,f18';
 const EM_KLINE_FIELDS1 = 'f1,f2,f3,f4,f5,f6';
 const EM_KLINE_FIELDS2 = 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61';
 
@@ -255,7 +255,9 @@ function buildTencentSnapshot(def: IndexDefinition, fields: string[]): IndexSnap
     changePercent: toNumber(fields[32]),
     high: toNumber(fields[33]),
     low: toNumber(fields[34]),
-    amount: toNumber(fields[37]),
+    // Tencent reports turnover (fields[37]) in 万元; scale to 元 so it matches
+    // the Eastmoney f48/f6 unit and the two sources agree.
+    amount: toNumber(fields[37]) * 10_000,
     timestamp: Math.floor(Date.now() / 1000),
     source: 'tencent',
   };
@@ -322,12 +324,12 @@ async function fetchEastmoneySnapshots(defs: IndexDefinition[]): Promise<Sourced
       price: toNumber(r.f2),
       change: toNumber(r.f4),
       changePercent: toNumber(r.f3),
-      open: 0,
-      high: 0,
-      low: 0,
-      prevClose: 0,
-      volume: 0,
-      amount: 0,
+      open: toNumber(r.f17),
+      high: toNumber(r.f15),
+      low: toNumber(r.f16),
+      prevClose: toNumber(r.f18),
+      volume: toNumber(r.f5),
+      amount: toNumber(r.f6),
       timestamp,
       source: 'eastmoney',
     });
