@@ -1,0 +1,151 @@
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { dexterPath } from '../utils/paths.js';
+import { LongTermChatHistory } from '../utils/long-term-chat-history.js';
+
+export type ConversationRole = 'user' | 'assistant';
+
+export interface ConversationMessage {
+  id: string;
+  role: ConversationRole;
+  content: string;
+  timestamp: number;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ConversationMessage[];
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+}
+
+const CONVERSATIONS_DIR = dexterPath('conversations');
+const DEFAULT_TITLE = 'New conversation';
+const MAX_TITLE_CHARS = 60;
+
+let flatHistory: LongTermChatHistory | null = null;
+
+function getFlatHistory(): LongTermChatHistory {
+  if (!flatHistory) {
+    flatHistory = new LongTermChatHistory();
+  }
+  return flatHistory;
+}
+
+function sanitizeId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function conversationPath(id: string): string {
+  return join(CONVERSATIONS_DIR, `${sanitizeId(id)}.json`);
+}
+
+function normalizeTitle(title?: string): string {
+  const trimmed = title?.trim();
+  if (!trimmed) return DEFAULT_TITLE;
+  return trimmed.length > MAX_TITLE_CHARS ? `${trimmed.slice(0, MAX_TITLE_CHARS)}…` : trimmed;
+}
+
+async function save(conversation: Conversation): Promise<void> {
+  await mkdir(CONVERSATIONS_DIR, { recursive: true });
+  await writeFile(conversationPath(conversation.id), JSON.stringify(conversation, null, 2), 'utf-8');
+}
+
+/** Create a new conversation whose JSON file is the source of truth. */
+export async function createConversation(title?: string): Promise<Conversation> {
+  const now = Date.now();
+  const conversation: Conversation = {
+    id: randomUUID(),
+    title: normalizeTitle(title),
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+  };
+  await save(conversation);
+  return conversation;
+}
+
+/** Read a conversation, returning null when it does not exist or is invalid. */
+export async function getConversation(id: string): Promise<Conversation | null> {
+  try {
+    const raw = await readFile(conversationPath(id), 'utf-8');
+    const parsed = JSON.parse(raw) as Conversation;
+    if (!parsed?.id || !Array.isArray(parsed.messages)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** List conversation summaries, newest first. */
+export async function listConversations(): Promise<ConversationSummary[]> {
+  let files: string[];
+  try {
+    files = await readdir(CONVERSATIONS_DIR);
+  } catch {
+    return [];
+  }
+
+  const summaries: ConversationSummary[] = [];
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    const conversation = await getConversation(file.slice(0, -'.json'.length));
+    if (!conversation) continue;
+    summaries.push({
+      id: conversation.id,
+      title: conversation.title,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      messageCount: conversation.messages.length,
+    });
+  }
+  return summaries.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/**
+ * Append a message to the per-conversation JSON and mirror it to the flat
+ * chat_history.json so the CLI `/history` command stays consistent.
+ */
+export async function appendMessage(
+  conversationId: string,
+  message: { role: ConversationRole; content: string },
+): Promise<Conversation | null> {
+  const conversation = await getConversation(conversationId);
+  if (!conversation) return null;
+
+  const now = Date.now();
+  conversation.messages.push({
+    id: randomUUID(),
+    role: message.role,
+    content: message.content,
+    timestamp: now,
+  });
+  conversation.updatedAt = now;
+  if (conversation.title === DEFAULT_TITLE && message.role === 'user') {
+    conversation.title = normalizeTitle(message.content);
+  }
+  await save(conversation);
+
+  try {
+    const flat = getFlatHistory();
+    if (message.role === 'user') {
+      await flat.addUserMessage(message.content);
+    } else {
+      await flat.updateAgentResponse(message.content);
+    }
+  } catch {
+    // Flat history is best-effort and must not break the web conversation.
+  }
+
+  return conversation;
+}

@@ -42,6 +42,13 @@ Keep tables compact:
 - Omit units in cells if header has them`,
 };
 
+/** Web mirrors CLI: same tone/formatting, surfaced in the local web UI. */
+const WEB_PROFILE: ChannelProfile = {
+  ...CLI_PROFILE,
+  label: 'Web',
+  preamble: 'Your output is displayed in a local web interface. Markdown renders natively, including tables.',
+};
+
 const WHATSAPP_PROFILE: ChannelProfile = {
   label: 'WhatsApp',
   preamble: 'Your output is delivered via WhatsApp. Write like a concise, knowledgeable friend texting.',
@@ -69,6 +76,7 @@ const WHATSAPP_PROFILE: ChannelProfile = {
 /** Registry of channel profiles. Add new channels here. */
 const CHANNEL_PROFILES: Record<string, ChannelProfile> = {
   cli: CLI_PROFILE,
+  web: WEB_PROFILE,
   whatsapp: WHATSAPP_PROFILE,
 };
 

@@ -226,6 +226,11 @@ export interface StreamProgressEvent {
   type: 'stream_progress';
   charDelta: number;
   mode: StreamMode;
+  /**
+   * Accumulated response text for the current turn. Only present when
+   * `mode === 'responding'`, so the web UI can render the answer as it streams.
+   */
+  text?: string;
 }
 
 /**

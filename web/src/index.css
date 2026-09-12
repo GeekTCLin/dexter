@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  ::selection {
+    background-color: #dbeafe;
+    color: #0f172a;
+  }
+}
+
+@layer components {
+  .markdown-body {
+    @apply leading-relaxed;
+  }
+
+  .markdown-body h1 {
+    @apply text-display-xl font-display mt-8 mb-4 text-ink;
+  }
+
+  .markdown-body h2 {
+    @apply text-display-lg font-display mt-6 mb-3 text-ink;
+  }
+
+  .markdown-body h3 {
+    @apply text-display-md font-display mt-4 mb-2 text-ink;
+  }
+
+  .markdown-body p {
+    @apply mb-4 text-[0.95rem];
+  }
+
+  .markdown-body ul {
+    @apply list-disc pl-6 mb-4 space-y-1;
+  }
+
+  .markdown-body ol {
+    @apply list-decimal pl-6 mb-4 space-y-1;
+  }
+
+  .markdown-body li {
+    @apply text-[0.95rem];
+  }
+
+  .markdown-body a {
+    @apply text-accent underline underline-offset-2 hover:text-accent-dark transition-colors;
+  }
+
+  .markdown-body code:not(pre code) {
+    @apply font-mono text-sm bg-monospace-bg px-1.5 py-0.5 rounded border border-monospace-border;
+  }
+
+  .markdown-body pre {
+    @apply font-mono text-sm bg-monospace-bg border border-monospace-border rounded-lg p-4 mb-4 overflow-x-auto;
+  }
+
+  .markdown-body pre code {
+    @apply bg-transparent border-0 p-0;
+  }
+
+  .markdown-body blockquote {
+    @apply border-l-4 border-accent-muted pl-4 italic text-ink-secondary mb-4;
+  }
+
+  .markdown-body table {
+    @apply w-full border-collapse mb-4 text-sm;
+  }
+
+  .markdown-body th {
+    @apply text-left font-semibold px-3 py-2 border-b-2 border-surface-border bg-surface-sunken;
+  }
+
+  .markdown-body td {
+    @apply px-3 py-2 border-b border-surface-border;
+  }
+
+  .markdown-body hr {
+    @apply border-surface-border my-6;
+  }
+
+  .markdown-body strong {
+    @apply font-semibold text-ink;
+  }
+}
+
+/* Dark mode overrides */
+.dark .markdown-body code:not(pre code) {
+  @apply bg-gray-800 border-gray-700 text-gray-200;
+}
+
+.dark .markdown-body pre {
+  @apply bg-gray-900 border-gray-700;
+}
+
+.dark ::selection {
+  background-color: #1e3a5f;
+  color: #f8fafc;
+}
+
+.dark * {
+  scrollbar-color: #475569 transparent;
+}

@@ -15,6 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "web": "bun run src/web/index.ts",
+    "web:dev": "bun -e \"const root=process.cwd();const be=Bun.spawn(['bun','run','src/web/index.ts'],{cwd:root,stdout:'inherit',stderr:'inherit'});const fe=Bun.spawn(['bun','run','dev'],{cwd:root+'/web',stdout:'inherit',stderr:'inherit'});process.on('SIGINT',()=>{be.kill();fe.kill();process.exit()});await Promise.all([be.exited,fe.exited])\"",
     "postinstall": "playwright install chromium"
   },
   "dependencies": {

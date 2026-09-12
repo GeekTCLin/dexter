@@ -25,7 +25,7 @@ const DEFAULT_MAX_ITERATIONS = 10;
 const MAX_OVERFLOW_RETRIES = 2;
 const OVERFLOW_KEEP_ROUNDS = 3;
 
-/** Tools that require an interactive user and are only bound on the CLI channel. */
+/** Tools that require an interactive user and are only bound on interactive (CLI/web) channels. */
 const CLI_ONLY_TOOLS = new Set<string>(['ask_user_question', 'bash']);
 
 /**
@@ -80,10 +80,12 @@ export class Agent {
     let tools = config.toolAllowlist
       ? allTools.filter(t => config.toolAllowlist!.includes(t.name))
       : allTools;
-    // CLI-only tools (interactive prompts) are dropped on non-CLI channels
-    // (WhatsApp/gateway) and in headless runs, where there is no user at a keyboard.
-    const isCli = !config.channel || config.channel === 'cli';
-    if (!isCli) {
+    // Interactive-only tools are dropped on non-interactive channels
+    // (WhatsApp/gateway) and in headless runs, where there is no user at a
+    // keyboard. The web channel is interactive (approval/question bridging), so
+    // it keeps them alongside the CLI.
+    const isInteractive = !config.channel || config.channel === 'cli' || config.channel === 'web';
+    if (!isInteractive) {
       tools = tools.filter(t => !CLI_ONLY_TOOLS.has(t.name));
     }
     // The concurrency map is a name→bool lookup; extra entries are harmless since
@@ -329,7 +331,11 @@ export class Agent {
       accumulated = accumulated ? accumulated.concat(chunk) : chunk;
       const { charDelta, mode } = inspectChunkContent(chunk);
       if (charDelta > 0 || mode !== 'responding') {
-        yield { type: 'stream_progress', charDelta, mode };
+        const event: StreamProgressEvent = { type: 'stream_progress', charDelta, mode };
+        if (mode === 'responding') {
+          event.text = extractResponseText(accumulated.content);
+        }
+        yield event;
       }
     }
 
@@ -665,6 +671,30 @@ const MODE_PRIORITY: Record<StreamMode, number> = {
   'tool-input': 3,
   'tool-use': 4,
 };
+
+/**
+ * Extract accumulated plain text from LangChain message content. Handles both a
+ * plain string (most providers) and an array of typed parts (Anthropic), taking
+ * the same text parts as inspectChunkContent but concatenating their contents
+ * rather than counting them.
+ */
+function extractResponseText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  let text = '';
+  for (const part of content) {
+    if (!part || typeof part !== 'object') continue;
+    if ((part as { type?: string }).type !== 'text') continue;
+    const partText = (part as { text?: string }).text;
+    if (typeof partText === 'string') text += partText;
+  }
+  return text;
+}
 
 /**
  * Walk one streaming chunk's content and report total char-delta plus the most
