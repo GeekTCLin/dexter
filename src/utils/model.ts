@@ -35,6 +35,16 @@ const PROVIDER_MODELS: Record<string, Model[]> = {
     { id: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro' },
     { id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash' },
   ],
+  'opencode-go': [
+    { id: 'opencode-go/glm-5.3', displayName: 'GLM 5.3' },
+    { id: 'opencode-go/glm-5.3-flash', displayName: 'GLM 5.3 Flash' },
+    { id: 'opencode-go/deepseek-v4.1-flash', displayName: 'DeepSeek V4.1 Flash' },
+    { id: 'opencode-go/deepseek-v4-pro', displayName: 'DeepSeek V4 Pro' },
+    { id: 'opencode-go/kimi-k2.7-code', displayName: 'Kimi K2.7 Code' },
+    { id: 'opencode-go/kimi-k3', displayName: 'Kimi K3' },
+    { id: 'opencode-go/mimo-v2.5', displayName: 'MiMo V2.5' },
+    { id: 'opencode-go/longcat-2.0', displayName: 'LongCat 2.0' },
+  ],
 };
 
 export const PROVIDERS: Provider[] = PROVIDER_DEFS.map((provider) => ({
