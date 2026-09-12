@@ -63,3 +63,4 @@ coverage.json
 scratchpads/*
 # Added by code-review-graph
 .code-review-graph/
+*.tsbuildinfo
