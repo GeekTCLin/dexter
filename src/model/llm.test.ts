@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { getChatModel } from './llm.js';
+import { resolveProvider } from '../providers.js';
 
 describe('OpenAI API routing', () => {
   test('uses the Responses API for the GPT-5.6 family', () => {
@@ -16,6 +17,28 @@ describe('OpenAI API routing', () => {
         delete process.env.OPENAI_API_KEY;
       } else {
         process.env.OPENAI_API_KEY = previousApiKey;
+      }
+    }
+  });
+});
+
+describe('OpenCode Go routing', () => {
+  test('routes opencode-go/* to the Go gateway and strips the prefix', () => {
+    const previousApiKey = process.env.OPENCODE_API_KEY;
+    process.env.OPENCODE_API_KEY = 'test-key';
+
+    try {
+      expect(resolveProvider('opencode-go/glm-5.3').id).toBe('opencode-go');
+      expect(resolveProvider('opencode-go/deepseek-v4.1-flash').fastModel).toBe(
+        'opencode-go/deepseek-v4-flash',
+      );
+      const llm = getChatModel('opencode-go/glm-5.3') as unknown as { model?: string };
+      expect(llm.model).toBe('glm-5.3');
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.OPENCODE_API_KEY;
+      } else {
+        process.env.OPENCODE_API_KEY = previousApiKey;
       }
     }
   });

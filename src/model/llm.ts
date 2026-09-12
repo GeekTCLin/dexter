@@ -18,6 +18,9 @@ import { resolveProvider, getProviderById } from '@/providers';
 export const DEFAULT_PROVIDER = 'openai';
 export const DEFAULT_MODEL = 'gpt-5.6-sol';
 
+// Stable per-process session id sent to OpenCode Go for routing/prompt caching.
+const OPENCODE_GO_SESSION_ID = `dexter-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
 /**
  * Gets the fast model variant for the given provider.
  * Falls back to the provided model if no fast variant is configured (e.g., Ollama).
@@ -126,6 +129,21 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
       }),
     });
   },
+  'opencode-go': (name, opts) =>
+    new ChatOpenAI({
+      model: name.replace(/^opencode-go\//, ''),
+      ...opts,
+      apiKey: getApiKey('OPENCODE_API_KEY'),
+      configuration: {
+        baseURL: 'https://opencode.ai/zen/go/v1',
+        defaultHeaders: {
+          // OpenCode Go asks clients to identify themselves and send a stable
+          // per-conversation session id (used for routing + prompt caching).
+          'User-Agent': 'dexter',
+          'x-opencode-session': OPENCODE_GO_SESSION_ID,
+        },
+      },
+    }),
   ollama: (name, opts) =>
     new ChatOllama({
       model: name.replace(/^ollama:/, ''),

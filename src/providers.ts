@@ -68,6 +68,15 @@ export const PROVIDERS: ProviderDef[] = [
     contextWindow: 1_000_000,
   },
   {
+    id: 'opencode-go',
+    displayName: 'OpenCode Go',
+    modelPrefix: 'opencode-go/',
+    apiKeyEnvVar: 'OPENCODE_API_KEY',
+    fastModel: 'opencode-go/deepseek-v4-flash',
+    // Gateway serves heterogeneous models (200k–1M); conservative default.
+    contextWindow: 200_000,
+  },
+  {
     id: 'openrouter',
     displayName: 'OpenRouter',
     modelPrefix: 'openrouter:',
