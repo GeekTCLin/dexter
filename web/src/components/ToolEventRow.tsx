@@ -51,7 +51,7 @@ export function ToolEventRow({ display }: { display: ToolEventDisplay }) {
         const res = await getToolResult(resultRef);
         setFullResult(display.id, res.content);
       } catch {
-        setFullResult(display.id, "[Failed to load full result]");
+        setFullResult(display.id, "[加载完整结果失败]");
       } finally {
         setLoadingResult(display.id, false);
       }
@@ -92,7 +92,7 @@ export function ToolEventRow({ display }: { display: ToolEventDisplay }) {
               onClick={handleExpand}
               className="text-[10px] text-accent hover:text-accent-dark transition-colors ml-auto opacity-0 group-hover:opacity-100"
             >
-              {expanded ? "collapse" : "expand"}
+              {expanded ? "收起" : "展开"}
             </button>
           )}
         </div>
@@ -125,7 +125,7 @@ export function ToolEventRow({ display }: { display: ToolEventDisplay }) {
             {input && (
               <div className="mb-2">
                 <div className="text-[10px] font-semibold text-ink-tertiary uppercase tracking-wider mb-1">
-                  Input
+                  输入
                 </div>
                 <pre className="font-mono text-[11px] text-ink-secondary whitespace-pre-wrap break-words overflow-x-auto max-h-40 overflow-y-auto">
                   {JSON.stringify(input, null, 2)}
@@ -135,11 +135,11 @@ export function ToolEventRow({ display }: { display: ToolEventDisplay }) {
             {displayContent && (
               <div>
                 <div className="text-[10px] font-semibold text-ink-tertiary uppercase tracking-wider mb-1">
-                  Result
+                  结果
                 </div>
                 {loadingResult ? (
                   <div className="text-[11px] text-ink-tertiary font-mono animate-pulse-soft">
-                    Loading full result...
+                    正在加载完整结果…
                   </div>
                 ) : (
                   <pre className="font-mono text-[11px] text-ink-secondary whitespace-pre-wrap break-words overflow-x-auto max-h-60 overflow-y-auto">

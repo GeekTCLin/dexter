@@ -40,7 +40,7 @@ export function ApprovalDialog() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-amber-900 mb-1">
-            Tool Approval Required
+            需要工具授权
           </div>
           <div className="font-mono text-xs text-amber-800 mb-1">
             {pending.tool.replace(/_/g, " ")}
@@ -58,25 +58,25 @@ export function ApprovalDialog() {
               onClick={() => handleApprove("allow-once")}
               className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
-              Allow Once
+              允许一次
             </button>
             <button
               onClick={() => handleApprove("allow-session")}
               className="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
             >
-              Allow This Session
+              允许本次会话
             </button>
             <button
               onClick={() => handleApprove("allow-always")}
               className="px-3 py-1.5 text-xs font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
-              Always Allow
+              始终允许
             </button>
             <button
               onClick={handleDeny}
               className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
             >
-              Deny
+              拒绝
             </button>
           </div>
         </div>

@@ -48,7 +48,7 @@ export function Composer() {
         id: `error-${Date.now()}`,
         role: "assistant",
         content:
-          "Failed to send message. Is the Dexter backend running?",
+          "发送失败。请确认 Dexter 后端是否已启动。",
         timestamp: Date.now(),
       });
     }
@@ -105,8 +105,8 @@ export function Composer() {
             onKeyDown={handleKeyDown}
             placeholder={
               isStreaming
-                ? "Dexter is thinking..."
-                : "Ask about financial data, companies, filings..."
+                ? "Dexter 正在思考…"
+                : "输入金融数据、公司、财报等问题…"
             }
             disabled={isStreaming}
             rows={1}
@@ -116,7 +116,7 @@ export function Composer() {
             <button
               onClick={handleCancel}
               className="flex-shrink-0 w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
-              title="Cancel"
+              title="取消"
             >
               <svg
                 width="12"
@@ -133,7 +133,7 @@ export function Composer() {
               onClick={handleSend}
               disabled={!input.trim()}
               className="flex-shrink-0 w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center hover:bg-accent-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Send"
+              title="发送"
             >
               <svg
                 width="14"
@@ -153,11 +153,11 @@ export function Composer() {
         </div>
         <div className="flex items-center justify-between mt-1.5 px-1">
           <span className="text-[10px] text-ink-tertiary">
-            Shift+Enter for new line
+            Shift+Enter 换行
           </span>
           {isStreaming && activeRunId && (
             <span className="text-[10px] text-ink-tertiary font-mono">
-              run: {activeRunId.slice(0, 8)}
+              运行: {activeRunId.slice(0, 8)}
             </span>
           )}
         </div>

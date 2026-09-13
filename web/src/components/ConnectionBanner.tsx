@@ -8,17 +8,17 @@ export function ConnectionBanner() {
 
   const messages: Record<string, { text: string; color: string }> = {
     connecting: {
-      text: "Connecting to Dexter backend...",
+      text: "正在连接 Dexter 后端…",
       color: "bg-amber-50 text-amber-800 border-amber-200",
     },
     disconnected: {
-      text: "Connection lost. Attempting to reconnect...",
+      text: "连接断开，正在尝试重新连接…",
       color: "bg-orange-50 text-orange-800 border-orange-200",
     },
     error: {
       text: token
-        ? "Cannot reach Dexter backend. Ensure the server is running on port 3777."
-        : "No auth token found. Open this page with ?token=<token> from the server startup banner.",
+        ? "无法连接 Dexter 后端。请确认服务器是否在 3777 端口运行。"
+        : "未找到认证令牌。请通过服务器启动横幅中的 ?token=<token> 打开此页面。",
       color: "bg-red-50 text-red-800 border-red-200",
     },
   };

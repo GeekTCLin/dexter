@@ -20,7 +20,7 @@ function Nav() {
             Dexter
           </span>
           <span className="text-[10px] text-ink-tertiary font-mono">
-            research workstation
+            研究工作站
           </span>
         </Link>
         <div className="flex items-center gap-1">
@@ -32,7 +32,7 @@ function Nav() {
                 : "text-ink-secondary hover:text-ink"
             }`}
           >
-            Chat
+            对话
           </Link>
           <Link
             to="/settings"
@@ -42,7 +42,7 @@ function Nav() {
                 : "text-ink-secondary hover:text-ink"
             }`}
           >
-            Settings
+            设置
           </Link>
         </div>
       </div>

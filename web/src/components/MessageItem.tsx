@@ -19,7 +19,7 @@ export function MessageItem({ message }: { message: ConversationMessage }) {
             : "bg-surface-sunken text-ink-secondary border-surface-border"
         }`}
       >
-        {isUser ? "You" : "Dx"}
+        {isUser ? "你" : "Dx"}
       </div>
 
       {/* Content */}

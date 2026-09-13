@@ -33,13 +33,24 @@ const config: Config = {
       fontFamily: {
         display: [
           '"Source Serif 4"',
-          '"Playfair Display"',
+          '"Noto Serif SC"',
+          '"Source Han Serif SC"',
+          '"Songti SC"',
           "Georgia",
           "serif",
         ],
-        body: ['"Inter"', '"Source Sans 3"', "system-ui", "sans-serif"],
+        body: [
+          '"Inter"',
+          '"Noto Sans SC"',
+          '"PingFang SC"',
+          '"Microsoft YaHei"',
+          "system-ui",
+          "sans-serif",
+        ],
         mono: [
           '"JetBrains Mono"',
+          '"Sarasa Mono SC"',
+          '"Cascadia Mono"',
           '"Fira Code"',
           '"SF Mono"',
           "ui-monospace",

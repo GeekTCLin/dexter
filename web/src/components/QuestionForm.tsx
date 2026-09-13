@@ -44,7 +44,7 @@ export function QuestionForm() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-blue-900 mb-3">
-            Dexter needs your input
+            Dexter 需要您的输入
           </div>
           <div className="space-y-3">
             {pending.questions.map((q: Question, i: number) => (
@@ -87,7 +87,7 @@ export function QuestionForm() {
                       if (e.key === "Enter") handleSubmit();
                     }}
                     className="w-full px-3 py-1.5 text-xs border border-blue-200 rounded-lg bg-white text-ink focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    placeholder="Type your answer..."
+                    placeholder="输入您的回答…"
                   />
                 )}
               </div>
@@ -98,13 +98,13 @@ export function QuestionForm() {
               onClick={handleSubmit}
               className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Submit
+              提交
             </button>
             <button
               onClick={handleDecline}
               className="px-3 py-1.5 text-xs font-medium bg-white text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
             >
-              Skip
+              跳过
             </button>
           </div>
         </div>

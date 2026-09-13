@@ -95,7 +95,7 @@ export function SettingsPanel() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12">
         <div className="text-center text-ink-tertiary animate-pulse-soft">
-          Loading configuration...
+          正在加载配置…
         </div>
       </div>
     );
@@ -105,13 +105,13 @@ export function SettingsPanel() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12">
         <div className="text-center text-red-600">
-          <p className="mb-2">Failed to load configuration.</p>
+          <p className="mb-2">加载配置失败。</p>
           <p className="text-sm text-ink-tertiary">{error}</p>
           <Link
             to="/"
             className="inline-block mt-4 text-sm text-accent hover:text-accent-dark"
           >
-            Back to chat
+            返回对话
           </Link>
         </div>
       </div>
@@ -123,16 +123,16 @@ export function SettingsPanel() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-display-lg font-display text-ink">Settings</h1>
+          <h1 className="text-display-lg font-display text-ink">设置</h1>
           <p className="text-sm text-ink-tertiary mt-1">
-            Configure Dexter's research capabilities
+            配置 Dexter 的研究能力
           </p>
         </div>
         <Link
           to="/"
           className="px-3 py-1.5 text-xs font-medium text-accent border border-accent rounded-lg hover:bg-accent hover:text-white transition-colors"
         >
-          Back to Chat
+          返回对话
         </Link>
       </div>
 
@@ -144,7 +144,7 @@ export function SettingsPanel() {
 
       {saving && (
         <div className="fixed top-4 right-4 px-3 py-1.5 bg-accent text-white text-xs rounded-lg shadow-lg animate-fade-in z-50">
-          Saving...
+          保存中…
         </div>
       )}
 
@@ -152,15 +152,15 @@ export function SettingsPanel() {
         {/* Model Provider */}
         <section className="bg-surface-raised border border-surface-border rounded-xl p-5">
           <h2 className="text-sm font-semibold text-ink mb-1">
-            LLM Provider & Model
+            LLM 服务商与模型
           </h2>
           <p className="text-xs text-ink-tertiary mb-4">
-            Select the AI model for research analysis
+            选择用于研究分析的 AI 模型
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-ink-secondary mb-1.5">
-                Provider
+                服务商
               </label>
               <div className="text-sm font-mono text-ink px-3 py-2 bg-surface-sunken border border-surface-border rounded-lg">
                 {config?.provider ?? "—"}
@@ -168,7 +168,7 @@ export function SettingsPanel() {
             </div>
             <div>
               <label className="block text-xs font-medium text-ink-secondary mb-1.5">
-                Model
+                模型
               </label>
               <select
                 value={config?.modelId ?? ""}
@@ -189,11 +189,11 @@ export function SettingsPanel() {
 
         {/* API Key */}
         <section className="bg-surface-raised border border-surface-border rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-ink mb-1">API Key</h2>
+          <h2 className="text-sm font-semibold text-ink mb-1">API 密钥</h2>
           <p className="text-xs text-ink-tertiary mb-4">
             {config?.hasApiKey
-              ? `API key is set for ${config?.provider}. Enter a new one to replace.`
-              : `No API key configured for ${config?.provider}.`}
+              ? `已为 ${config?.provider} 设置 API 密钥。输入新密钥可替换。`
+              : `尚未为 ${config?.provider} 配置 API 密钥。`}
           </p>
           <div className="flex gap-2">
             <div className="flex-1 relative">
@@ -202,7 +202,7 @@ export function SettingsPanel() {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={
-                  config?.hasApiKey ? "Enter new key..." : "Enter API key..."
+                  config?.hasApiKey ? "输入新密钥…" : "输入 API 密钥…"
                 }
                 className="w-full text-sm font-mono text-ink px-3 py-2 pr-10 bg-surface-sunken border border-surface-border rounded-lg focus:outline-none focus:ring-1 focus:ring-accent"
                 onKeyDown={(e) => {
@@ -213,7 +213,7 @@ export function SettingsPanel() {
                 onClick={() => setShowApiKey(!showApiKey)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-tertiary hover:text-ink-secondary text-xs"
               >
-                {showApiKey ? "Hide" : "Show"}
+                {showApiKey ? "隐藏" : "显示"}
               </button>
             </div>
             <button
@@ -221,16 +221,16 @@ export function SettingsPanel() {
               disabled={!apiKey.trim()}
               className="px-4 py-2 text-xs font-medium bg-accent text-white rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-30"
             >
-              Save
+              保存
             </button>
           </div>
         </section>
 
         {/* Search Provider */}
         <section className="bg-surface-raised border border-surface-border rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-ink mb-1">Web Search</h2>
+          <h2 className="text-sm font-semibold text-ink mb-1">网络搜索</h2>
           <p className="text-xs text-ink-tertiary mb-4">
-            Preferred search provider for web research
+            选择网络研究的搜索引擎
           </p>
           <div className="flex flex-wrap gap-2">
             {SEARCH_PROVIDER_OPTIONS.map(({ id, name }) => (
@@ -254,10 +254,10 @@ export function SettingsPanel() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-ink mb-1">
-                Long-term Memory
+                长期记忆
               </h2>
               <p className="text-xs text-ink-tertiary">
-                Enable persistent memory across conversations
+                开启后可在跨会话中保留记忆
               </p>
             </div>
             <button

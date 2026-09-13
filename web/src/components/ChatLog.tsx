@@ -51,15 +51,14 @@ export function ChatLog() {
               Dexter
             </h1>
             <p className="text-sm text-ink-tertiary max-w-sm">
-              AI-powered financial research. Ask about companies, markets,
-              filings, or investment theses.
+              AI 驱动的金融研究助手。可以查询公司、市场、财报或投资主题。
             </p>
             <div className="mt-8 grid grid-cols-2 gap-2 max-w-md">
               {[
-                "Analyze AAPL's latest 10-K",
-                "Compare NVDA vs AMD fundamentals",
-                "What's the DCF for MSFT?",
-                "Recent insider trading for TSLA",
+                "分析 AAPL 最新 10-K 报告",
+                "对比 NVDA 与 AMD 基本面",
+                "MSFT 的 DCF 估值是多少？",
+                "TSLA 近期内部人交易",
               ].map((suggestion) => (
                 <button
                   key={suggestion}

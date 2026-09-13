@@ -12,7 +12,7 @@ export function ThinkingRow() {
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-xs font-medium text-ink-tertiary uppercase tracking-wider mb-1">
-          Thinking
+          思考中
         </div>
         <p className="font-mono text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap break-words">
           {thinking}
