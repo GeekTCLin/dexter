@@ -1,4 +1,5 @@
 import type { DexterConfig, SearchProviderId } from "../types";
+import type { ConversationSummary } from "../store/useStore";
 
 function getToken(): string | null {
   return sessionStorage.getItem("dexter-token");
@@ -56,7 +57,7 @@ export async function approveRun(
 
 export async function answerRun(
   runId: string,
-  answers: string[],
+  answers: (string | string[])[],
   declined?: boolean
 ): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/api/runs/${runId}/answer`, {
@@ -121,16 +122,27 @@ export async function getToolResult(
   return request<{ content: string }>(`/api/tool-results/${id}`);
 }
 
-export async function getConversations(): Promise<
-  Array<{ id: string; title: string; updatedAt: number }>
-> {
+export async function getConversations(): Promise<ConversationSummary[]> {
   return request("/api/conversations");
 }
 
 export async function getConversation(
   id: string
-): Promise<{ id: string; messages: Array<{ role: string; content: string; timestamp: number }> }> {
+): Promise<{
+  id: string;
+  title: string;
+  messages: Array<{ id?: string; role: string; content: string; timestamp: number }>;
+}> {
   return request(`/api/conversations/${id}`);
+}
+
+export async function createConversation(
+  title?: string
+): Promise<{ id: string; title: string; createdAt: number }> {
+  return request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
 }
 
 export function buildSSEUrl(runId: string, from?: number): string {

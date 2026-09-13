@@ -30,8 +30,9 @@ export interface ConversationSummary {
 }
 
 const CONVERSATIONS_DIR = dexterPath('conversations');
-const DEFAULT_TITLE = 'New conversation';
-const MAX_TITLE_CHARS = 60;
+const DEFAULT_TITLE = '新对话';
+const MAX_TITLE_CHARS = 30;
+const PLACEHOLDER_TITLES = new Set([DEFAULT_TITLE, 'New conversation']);
 
 let flatHistory: LongTermChatHistory | null = null;
 
@@ -50,10 +51,19 @@ function conversationPath(id: string): string {
   return join(CONVERSATIONS_DIR, `${sanitizeId(id)}.json`);
 }
 
-function normalizeTitle(title?: string): string {
-  const trimmed = title?.trim();
+/** Derive a conversation title from its first user message. */
+export function deriveTitle(message: string): string {
+  const trimmed = message.replace(/\s+/g, ' ').trim();
   if (!trimmed) return DEFAULT_TITLE;
   return trimmed.length > MAX_TITLE_CHARS ? `${trimmed.slice(0, MAX_TITLE_CHARS)}…` : trimmed;
+}
+
+function isPlaceholderTitle(title: string): boolean {
+  return PLACEHOLDER_TITLES.has(title.trim());
+}
+
+function normalizeTitle(title?: string): string {
+  return title?.trim() ? deriveTitle(title) : DEFAULT_TITLE;
 }
 
 async function save(conversation: Conversation): Promise<void> {
@@ -131,8 +141,13 @@ export async function appendMessage(
     timestamp: now,
   });
   conversation.updatedAt = now;
-  if (conversation.title === DEFAULT_TITLE && message.role === 'user') {
-    conversation.title = normalizeTitle(message.content);
+  const userMessageCount = conversation.messages.filter((entry) => entry.role === 'user').length;
+  if (
+    message.role === 'user' &&
+    userMessageCount === 1 &&
+    isPlaceholderTitle(conversation.title)
+  ) {
+    conversation.title = deriveTitle(message.content);
   }
   await save(conversation);
 

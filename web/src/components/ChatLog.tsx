@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useStore } from "../store/useStore";
 import { MessageItem } from "./MessageItem";
 import { ToolEventRow } from "./ToolEventRow";
@@ -6,10 +6,12 @@ import { ThinkingRow } from "./ThinkingRow";
 import { AnswerBox } from "./AnswerBox";
 import { ApprovalDialog } from "./ApprovalDialog";
 import { QuestionForm } from "./QuestionForm";
+import { LifecycleNotice } from "./LifecycleNotice";
 
 export function ChatLog() {
   const messages = useStore((s) => s.messages);
   const streamEvents = useStore((s) => s.streamEvents);
+  const systemEvents = useStore((s) => s.systemEvents);
   const currentThinking = useStore((s) => s.currentThinking);
   const currentAnswer = useStore((s) => s.currentAnswer);
   const finalAnswer = useStore((s) => s.finalAnswer);
@@ -17,12 +19,47 @@ export function ChatLog() {
   const isStreaming = useStore((s) => s.isStreaming);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Merge tool events and system notices into a single timeline sorted by seq.
+  const timeline = useMemo(() => {
+    type Entry = {
+      key: string;
+      seq: number;
+      kind: "tool" | "system";
+      toolId?: string;
+      systemDisplay?: import("../store/useStore").SystemNoticeDisplay;
+    };
+
+    const entries: Entry[] = [];
+
+    for (const te of streamEvents) {
+      entries.push({
+        key: te.id,
+        seq: te.event.seq,
+        kind: "tool",
+        toolId: te.id,
+      });
+    }
+
+    for (const se of systemEvents) {
+      entries.push({
+        key: se.id,
+        seq: se.seq,
+        kind: "system",
+        systemDisplay: se,
+      });
+    }
+
+    entries.sort((a, b) => a.seq - b.seq);
+    return entries;
+  }, [streamEvents, systemEvents]);
+
   // Auto-scroll to bottom on new content
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [
     messages.length,
     streamEvents.length,
+    systemEvents.length,
     currentThinking,
     currentAnswer,
     finalAnswer,
@@ -32,6 +69,7 @@ export function ChatLog() {
   const hasContent =
     messages.length > 0 ||
     streamEvents.length > 0 ||
+    systemEvents.length > 0 ||
     currentThinking ||
     currentAnswer ||
     finalAnswer ||
@@ -79,10 +117,19 @@ export function ChatLog() {
           <MessageItem key={msg.id} message={msg} />
         ))}
 
-        {/* Streaming tool events */}
-        {streamEvents.map((te) => (
-          <ToolEventRow key={te.id} display={te} />
-        ))}
+        {/* Merged timeline: tool events + lifecycle notices, sorted by seq */}
+        {timeline.map((entry) => {
+          if (entry.kind === "tool") {
+            const te = streamEvents.find((s) => s.id === entry.toolId);
+            return te ? <ToolEventRow key={entry.key} display={te} /> : null;
+          }
+          return entry.systemDisplay ? (
+            <LifecycleNotice
+              key={entry.key}
+              display={entry.systemDisplay}
+            />
+          ) : null;
+        })}
 
         {/* Live thinking */}
         <ThinkingRow />

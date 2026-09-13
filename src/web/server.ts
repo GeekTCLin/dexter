@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RunManager } from './run-manager.js';
 import { handleConfigRoute } from './config-routes.js';
-import { getConversation, listConversations } from './chat-store.js';
+import { getConversation, listConversations, createConversation } from './chat-store.js';
 import type { ApprovalDecision } from '../agent/types.js';
 import type { AnswerBody, ApproveBody, ChatRequestBody, SseFrame } from './types.js';
 
@@ -103,6 +103,16 @@ async function handleApi(
     return json(await listConversations());
   }
 
+  if (method === 'POST' && pathname === '/api/conversations') {
+    const payload = body as { title?: unknown } | null;
+    const title = typeof payload?.title === 'string' ? payload.title : undefined;
+    const conversation = await createConversation(title);
+    return json(
+      { id: conversation.id, title: conversation.title, createdAt: conversation.createdAt },
+      201,
+    );
+  }
+
   const conversationMatch = /^\/api\/conversations\/([^/]+)$/.exec(pathname);
   if (method === 'GET' && conversationMatch) {
     const conversation = await getConversation(decodeURIComponent(conversationMatch[1]));
@@ -112,7 +122,9 @@ async function handleApi(
   const eventsMatch = /^\/api\/runs\/([^/]+)\/events$/.exec(pathname);
   if (method === 'GET' && eventsMatch) {
     const runId = decodeURIComponent(eventsMatch[1]);
-    if (!runManager.hasRun(runId)) return json({ error: 'Run not found' }, 404);
+    if (!runManager.hasRun(runId) && !(await runManager.hasPersistedRun(runId))) {
+      return json({ error: 'Run not found' }, 404);
+    }
     return createSseResponse(req, url, runId, runManager);
   }
 
@@ -142,7 +154,7 @@ async function handleApi(
 
   const toolResultMatch = /^\/api\/tool-results\/([^/]+)$/.exec(pathname);
   if (method === 'GET' && toolResultMatch) {
-    const content = runManager.getToolResult(decodeURIComponent(toolResultMatch[1]));
+    const content = await runManager.getToolResult(decodeURIComponent(toolResultMatch[1]));
     return content === null ? json({ error: 'Not found' }, 404) : json({ content });
   }
 
@@ -211,26 +223,37 @@ function createSseResponse(req: Request, url: URL, runId: string, runManager: Ru
           // Stream already closed by the client.
         }
       };
+      let sawDone = false;
       const listener = (frame: SseFrame) => {
         send(formatAgentFrame(frame));
         if (frame.type === 'done') {
+          sawDone = true;
           send(formatDoneFrame(runId, frame));
           queueMicrotask(finish);
         }
       };
 
-      const unsub = runManager.subscribe(runId, parseFrom(url, req.headers.get('Last-Event-ID')), listener);
-      if (!unsub) {
-        send(formatDoneFrame(runId, null));
-        queueMicrotask(finish);
+      const from = parseFrom(url, req.headers.get('Last-Event-ID'));
+      const unsub = runManager.subscribe(runId, from, listener);
+      if (unsub) {
+        unsubscribe = unsub;
+        req.signal.addEventListener('abort', finish, { once: true });
+
+        // SSE comment heartbeat keeps the connection alive across tool waits that
+        // would otherwise trip the server idle timeout.
+        heartbeat = setInterval(() => send(': ping\n\n'), 15_000);
         return;
       }
-      unsubscribe = unsub;
-      req.signal.addEventListener('abort', finish, { once: true });
 
-      // SSE comment heartbeat keeps the connection alive across tool waits that
-      // would otherwise trip the server idle timeout.
-      heartbeat = setInterval(() => send(': ping\n\n'), 15_000);
+      // Nothing in memory: replay the persisted buffer (survives a restart).
+      void (async () => {
+        const frames = await runManager.replayPersisted(runId, from);
+        if (frames) {
+          for (const frame of frames) listener(frame);
+        }
+        if (!sawDone) send(formatDoneFrame(runId, null));
+        queueMicrotask(finish);
+      })();
     },
     cancel() {
       closed = true;

@@ -1,12 +1,31 @@
 import { create } from "zustand";
 import type {
   AgentEvent,
+  AgentEventType,
   ConversationMessage,
   ConnectionStatus,
   DexterConfig,
   PermissionDecision,
   Question,
 } from "../types";
+
+/* ─── UI-only display types ─── */
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  createdAt?: number;
+  updatedAt?: number;
+  messageCount?: number;
+}
+
+export interface SystemNoticeDisplay {
+  id: string;
+  seq: number;
+  type: AgentEventType;
+  label: string;
+  detail?: string;
+}
 
 export interface ToolEventDisplay {
   /** Stable key: the toolCallId when present, else a synthesized fallback. */
@@ -68,6 +87,17 @@ interface DexterState {
   messages: ConversationMessage[];
   addMessage: (msg: ConversationMessage) => void;
   clearMessages: () => void;
+  setMessages: (msgs: ConversationMessage[]) => void;
+
+  /* ─── Conversation List ─── */
+  conversations: ConversationSummary[];
+  setConversations: (list: ConversationSummary[]) => void;
+  addConversation: (c: ConversationSummary) => void;
+  updateConversationInList: (id: string, patch: Partial<ConversationSummary>) => void;
+
+  /* ─── Sidebar ─── */
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
 
   /* ─── Active Run ─── */
   activeRunId: string | null;
@@ -86,6 +116,11 @@ interface DexterState {
   setEventFullResult: (id: string, result: string) => void;
   setEventLoadingResult: (id: string, loading: boolean) => void;
   clearStreamEvents: () => void;
+
+  /* ─── System Notices ─── */
+  systemEvents: SystemNoticeDisplay[];
+  addSystemEvent: (e: SystemNoticeDisplay) => void;
+  clearSystemEvents: () => void;
 
   /* ─── Thinking ─── */
   currentThinking: string;
@@ -136,6 +171,23 @@ export const useStore = create<DexterState>((set) => ({
   messages: [],
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   clearMessages: () => set({ messages: [], conversationId: null }),
+  setMessages: (messages) => set({ messages }),
+
+  /* Conversation List */
+  conversations: [],
+  setConversations: (conversations) => set({ conversations }),
+  addConversation: (c) =>
+    set((s) => ({ conversations: [c, ...s.conversations.filter((x) => x.id !== c.id)] })),
+  updateConversationInList: (id, patch) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === id ? { ...c, ...patch } : c
+      ),
+    })),
+
+  /* Sidebar */
+  sidebarOpen: false,
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 
   /* Active Run */
   activeRunId: null,
@@ -218,7 +270,13 @@ export const useStore = create<DexterState>((set) => ({
         te.id === id ? { ...te, loadingResult } : te
       ),
     })),
-  clearStreamEvents: () => set({ streamEvents: [] }),
+  clearStreamEvents: () => set({ streamEvents: [], systemEvents: [] }),
+
+  /* System Notices */
+  systemEvents: [],
+  addSystemEvent: (e) =>
+    set((s) => ({ systemEvents: [...s.systemEvents, e] })),
+  clearSystemEvents: () => set({ systemEvents: [] }),
 
   /* Thinking */
   currentThinking: "",

@@ -1,15 +1,36 @@
 import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Agent } from '../agent/agent.js';
-import type { AgentEvent, ApprovalDecision, DoneEvent, ToolEndEvent } from '../agent/types.js';
+import type { AgentEvent, ApprovalDecision, ToolEndEvent } from '../agent/types.js';
 import type { PermissionDecision } from '../permissions/types.js';
-import type { Question, QuestionAnswer, UserAnswers } from '../tools/ask-user-question/types.js';
+import type { Question, UserAnswers } from '../tools/ask-user-question/types.js';
 import { InMemoryChatHistory } from '../utils/in-memory-chat-history.js';
 import { getSetting } from '../utils/config.js';
 import { getDefaultModelForProvider } from '../utils/model.js';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../model/llm.js';
+import { dexterPath } from '../utils/paths.js';
 import { MAX_TOOL_RESULT_CHARS, PREVIEW_CHARS } from '../utils/tool-result-storage.js';
+import { toQuestionAnswers } from './answers.js';
 import { appendMessage, createConversation, getConversation } from './chat-store.js';
-import type { SseFrame, WebEventType } from './types.js';
+import type { ConversationMessage } from './chat-store.js';
+import { buildHistoryFromMessages } from './history.js';
+import type { QuestionAnswerInput, SseFrame, WebEventType } from './types.js';
+
+const RUNS_DIR = dexterPath('runs');
+const TOOL_RESULTS_DIR = dexterPath('tool-results');
+
+function sanitizeFileId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function runPath(runId: string): string {
+  return join(RUNS_DIR, `${sanitizeFileId(runId)}.json`);
+}
+
+function toolResultPath(id: string): string {
+  return join(TOOL_RESULTS_DIR, `${sanitizeFileId(id)}.json`);
+}
 
 interface ApprovalRequest {
   tool: string;
@@ -41,6 +62,7 @@ interface RunState {
   running: boolean;
   completed: boolean;
   finalAnswer: string;
+  persistChain: Promise<void>;
 }
 
 interface RunConfig {
@@ -74,21 +96,31 @@ export class RunManager {
 
   async startRun(params: StartRunParams): Promise<StartRunResult> {
     let conversationId = params.conversationId;
+    let persistedMessages: ConversationMessage[] = [];
     if (conversationId) {
       const existing = await getConversation(conversationId);
-      if (!existing) conversationId = undefined;
+      if (existing) {
+        persistedMessages = existing.messages;
+      } else {
+        conversationId = undefined;
+      }
     }
     if (!conversationId) {
-      const conversation = await createConversation(params.message);
+      const conversation = await createConversation();
       conversationId = conversation.id;
     }
-    await appendMessage(conversationId, { role: 'user', content: params.message });
 
     const provider = getSetting('provider', DEFAULT_PROVIDER);
     const savedModel = getSetting<string | null>('modelId', null);
     const model = savedModel ?? getDefaultModelForProvider(provider) ?? DEFAULT_MODEL;
     const memoryEnabled =
       getSetting<{ enabled?: boolean } | undefined>('memory', undefined)?.enabled ?? true;
+
+    // Rebuild prior context before this turn is persisted so the current user
+    // message is not duplicated in history.
+    const history = this.getHistory(conversationId, model, persistedMessages);
+    await appendMessage(conversationId, { role: 'user', content: params.message });
+    history.saveUserQuery(params.message);
 
     const runId = `r_${randomUUID()}`;
     const run: RunState = {
@@ -103,11 +135,9 @@ export class RunManager {
       running: true,
       completed: false,
       finalAnswer: '',
+      persistChain: Promise.resolve(),
     };
     this.runs.set(runId, run);
-
-    const history = this.getHistory(conversationId, model);
-    history.saveUserQuery(params.message);
 
     const requestToolApproval = (request: ApprovalRequest): Promise<ApprovalDecision> =>
       new Promise((resolve) => {
@@ -145,7 +175,7 @@ export class RunManager {
     return true;
   }
 
-  answer(runId: string, answers: Array<string | QuestionAnswer>, declined = false): boolean {
+  answer(runId: string, answers: QuestionAnswerInput[], declined = false): boolean {
     const run = this.runs.get(runId);
     if (!run?.pendingQuestion) return false;
     const pending = run.pendingQuestion;
@@ -172,8 +202,43 @@ export class RunManager {
     return true;
   }
 
-  getToolResult(id: string): string | null {
-    return this.toolResults.get(id) ?? null;
+  async getToolResult(id: string): Promise<string | null> {
+    const cached = this.toolResults.get(id);
+    if (cached !== undefined) return cached;
+    try {
+      const raw = await readFile(toolResultPath(id), 'utf-8');
+      const parsed = JSON.parse(raw) as { content?: unknown };
+      if (typeof parsed.content === 'string') {
+        this.toolResults.set(id, parsed.content);
+        return parsed.content;
+      }
+    } catch {
+      // Not persisted or unreadable.
+    }
+    return null;
+  }
+
+  /** True when a run's buffer exists on disk (e.g. from a previous process). */
+  async hasPersistedRun(runId: string): Promise<boolean> {
+    return (await this.readPersistedFrames(runId)) !== null;
+  }
+
+  /** Load a run's persisted SSE buffer, or null when absent/corrupt. */
+  async readPersistedFrames(runId: string): Promise<SseFrame[] | null> {
+    try {
+      const raw = await readFile(runPath(runId), 'utf-8');
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as SseFrame[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Persisted frames with seq > from, or null when the run is not persisted. */
+  async replayPersisted(runId: string, from: number): Promise<SseFrame[] | null> {
+    const frames = await this.readPersistedFrames(runId);
+    if (!frames) return null;
+    return frames.filter((frame) => frame.seq > from);
   }
 
   /**
@@ -194,12 +259,18 @@ export class RunManager {
     return () => run.listeners.delete(listener);
   }
 
-  private getHistory(conversationId: string, model: string): InMemoryChatHistory {
-    let history = this.histories.get(conversationId);
-    if (!history) {
-      history = new InMemoryChatHistory(model);
-      this.histories.set(conversationId, history);
+  private getHistory(
+    conversationId: string,
+    model: string,
+    persisted: ConversationMessage[],
+  ): InMemoryChatHistory {
+    const cached = this.histories.get(conversationId);
+    if (cached) {
+      cached.setModel(model);
+      return cached;
     }
+    const history = buildHistoryFromMessages(model, persisted);
+    this.histories.set(conversationId, history);
     return history;
   }
 
@@ -263,6 +334,7 @@ export class RunManager {
       if (typeof result === 'string' && result.length > MAX_TOOL_RESULT_CHARS) {
         const resultRef = randomUUID();
         this.toolResults.set(resultRef, result);
+        this.persistToolResult(resultRef, result);
         payload = {
           ...rest,
           result: {
@@ -297,7 +369,39 @@ export class RunManager {
   private pushFrame(run: RunState, type: WebEventType, payload: Record<string, unknown>): void {
     const frame: SseFrame = { runId: run.id, seq: run.nextSeq++, type, payload };
     run.events.push(frame);
+    this.persistRun(run);
     for (const listener of run.listeners) listener(frame);
+  }
+
+  /**
+   * Best-effort persistence of a run's SSE buffer. Writes are serialized so a
+   * slow write can never overwrite a newer snapshot. Failures are logged only.
+   */
+  private persistRun(run: RunState): void {
+    let data: string;
+    try {
+      data = JSON.stringify(run.events);
+    } catch (error) {
+      console.error(`[web] failed to serialize run ${run.id}:`, error);
+      return;
+    }
+    run.persistChain = run.persistChain
+      .then(async () => {
+        await mkdir(RUNS_DIR, { recursive: true });
+        await writeFile(runPath(run.id), data, 'utf-8');
+      })
+      .catch((error) => {
+        console.error(`[web] failed to persist run ${run.id}:`, error);
+      });
+  }
+
+  /** Best-effort persistence of a full large tool result. */
+  private persistToolResult(id: string, content: string): void {
+    void mkdir(TOOL_RESULTS_DIR, { recursive: true })
+      .then(() => writeFile(toolResultPath(id), JSON.stringify({ content }), 'utf-8'))
+      .catch((error) => {
+        console.error(`[web] failed to persist tool result ${id}:`, error);
+      });
   }
 }
 
@@ -312,17 +416,3 @@ function isAbortError(error: unknown, signal?: AbortSignal): boolean {
   return typeof error === 'string' && /abort/i.test(error);
 }
 
-function toQuestionAnswers(
-  questions: Question[],
-  answers: Array<string | QuestionAnswer>,
-): QuestionAnswer[] {
-  return questions.map((question, index) => {
-    const value = answers[index];
-    if (value && typeof value === 'object') return value;
-    return {
-      header: question.header,
-      question: question.question,
-      selected: typeof value === 'string' ? [value] : [],
-    };
-  });
-}

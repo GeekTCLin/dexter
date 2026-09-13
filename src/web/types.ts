@@ -1,6 +1,5 @@
 import type { AgentEvent, ApprovalDecision } from '../agent/types.js';
 import type { PermissionDecision } from '../permissions/types.js';
-import type { QuestionAnswer } from '../tools/ask-user-question/types.js';
 
 /** Event types carried on the wire. Agent events plus web-only interactive prompts. */
 export type WebEventType = AgentEvent['type'] | 'user_question';
@@ -30,9 +29,24 @@ export interface ApproveBody {
   decision: ApprovalDecision;
 }
 
+/**
+ * One answer in POST /api/runs/:runId/answer: a single label, all selected
+ * labels, or a partial QuestionAnswer carrying selected/label/otherText/notes.
+ */
+export interface AnswerSelection {
+  label?: string;
+  selected?: string[];
+  otherText?: string;
+  notes?: string;
+  header?: string;
+  question?: string;
+}
+
+export type QuestionAnswerInput = string | string[] | AnswerSelection;
+
 /** POST /api/runs/:runId/answer body. */
 export interface AnswerBody {
-  answers: Array<string | QuestionAnswer>;
+  answers: QuestionAnswerInput[];
   declined?: boolean;
 }
 
