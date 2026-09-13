@@ -83,6 +83,32 @@ describe('resolveProvider placeholder handling (P0)', () => {
   });
 });
 
+describe('ollama provider model selection', () => {
+  test('uses MEMORY_EMBEDDING_MODEL when set', () => {
+    process.env.OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
+    process.env.MEMORY_EMBEDDING_MODEL = 'bge-m3';
+
+    const client = createEmbeddingClient({ provider: 'ollama' });
+    expect(client?.provider).toBe('ollama');
+    expect(client?.model).toBe('bge-m3');
+  });
+
+  test('explicit setting model overrides MEMORY_EMBEDDING_MODEL', () => {
+    process.env.OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
+    process.env.MEMORY_EMBEDDING_MODEL = 'env-model';
+
+    const client = createEmbeddingClient({ provider: 'ollama', model: 'settings-model' });
+    expect(client?.model).toBe('settings-model');
+  });
+
+  test('falls back to the default ollama model when MEMORY_EMBEDDING_MODEL is unset', () => {
+    process.env.OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
+
+    const client = createEmbeddingClient({ provider: 'ollama' });
+    expect(client?.model).toBe('nomic-embed-text');
+  });
+});
+
 describe('openai-compatible provider', () => {
   test('is enabled by MEMORY_EMBEDDING_BASE_URL and reports its provider/model', () => {
     process.env.MEMORY_EMBEDDING_BASE_URL = 'https://api.siliconflow.cn/v1';

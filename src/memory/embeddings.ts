@@ -249,7 +249,7 @@ export function createEmbeddingClient(params: {
     };
   }
 
-  const model = params.model || DEFAULT_OLLAMA_MODEL;
+  const model = params.model || process.env.MEMORY_EMBEDDING_MODEL || DEFAULT_OLLAMA_MODEL;
   const embeddings = new OllamaEmbeddings({
     baseUrl: process.env.OLLAMA_BASE_URL,
     model,

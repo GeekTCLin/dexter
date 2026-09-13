@@ -68,6 +68,7 @@ cp env.example .env
 | --- | --- | --- |
 | LLM | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `XAI_API_KEY` / `OPENROUTER_API_KEY` / `MOONSHOT_API_KEY` / `DEEPSEEK_API_KEY` / `OPENCODE_API_KEY` | 至少一个 |
 | 本地 LLM | `OLLAMA_BASE_URL`（默认 `http://127.0.0.1:11434`）、`OLLAMA_CLOUD_API_KEY` | 使用 Ollama 时 |
+| 记忆嵌入 | 本地 Ollama（`OLLAMA_BASE_URL`）自动生效；可选 `MEMORY_EMBEDDING_MODEL`、`MEMORY_EMBEDDING_TIMEOUT_MS`，或 `MEMORY_EMBEDDING_BASE_URL` / `MEMORY_EMBEDDING_API_KEY` 指向 OpenAI 兼容嵌入服务 | 语义记忆可选；不配则自动降级为关键词检索 |
 | 财务数据 | `FINANCIAL_DATASETS_API_KEY` | 使用美股财务工具时（**仅覆盖美股**，详见附录 A） |
 | 国内指数 | `DOMESTIC_INDEX_PROVIDER=eastmoney`、`DOMESTIC_INDEX_TIMEOUT_MS=15000`、可选 `DOMESTIC_INDEX_UA` | 不需要 key |
 | 联网搜索 | 内置 Bing(CN) / 百度（**无需 key**）；可选 `EXASEARCH_API_KEY` / `TAVILY_API_KEY` / `LANGSEARCH_API_KEY` | 默认可用；配置可选 key 作为兜底 |
@@ -221,7 +222,7 @@ bun run web
 | 美股财务 / 行情 / 公告（`get_financials`、`get_market_data` 美股部分、`read_filings`） | **缺 key 时不注册、不暴露给模型**；配置 key 后自动启用（仅覆盖美股，不含 A 股 / 港股） | `FINANCIAL_DATASETS_API_KEY`（**仅覆盖美股，不含 A 股 / 港股**） |
 | 通用联网搜索（`web_search`） | **默认启用**：内置 Bing(CN) / 百度无需 key；可选 Exa / Tavily / LangSearch 作为兜底（Perplexity 已摘除） | 无需 key；可选填 `EXASEARCH_API_KEY` / `TAVILY_API_KEY` / `LANGSEARCH_API_KEY` |
 | 社交舆情（`x_search`） | 需要 bearer token，且为境外服务（国内网络通常需代理） | `X_BEARER_TOKEN` |
-| 记忆向量检索（memory 语义召回） | 已实现但**未启用**，当前为关键词检索（可用、不报错） | 本地 Ollama + 一个嵌入模型（如 `ollama pull bge-m3`，中文推荐），或 `MEMORY_EMBEDDING_BASE_URL` 指向 OpenAI 兼容嵌入服务 |
+| 记忆向量检索（memory 语义召回） | **已启用**（本机：Ollama 0.34.0 + `bge-m3`，1024 维；`search()` 返回 `source: vector`）；未配置嵌入时自动降级为关键词检索（可用、不报错） | 本地 Ollama + 一个嵌入模型（如 `ollama pull bge-m3`，中文推荐），或 `MEMORY_EMBEDDING_BASE_URL` 指向 OpenAI 兼容嵌入服务 |
 
 ### A.3 成本参考
 
@@ -242,4 +243,4 @@ bun run web
 
 - **只做 A 股 / 指数**：无需任何操作，`get_index_*` 与 `domestic_search` 默认启用。
 - **需要美股财务**：在 `.env` 填 `FINANCIAL_DATASETS_API_KEY`（注意其**仅覆盖美股**）。
-- **需要语义记忆召回**：安装 Ollama 后执行 `ollama pull bge-m3`（默认 `OLLAMA_BASE_URL=http://127.0.0.1:11434`）即可；或设置 `MEMORY_EMBEDDING_BASE_URL` / `MEMORY_EMBEDDING_API_KEY` / `MEMORY_EMBEDDING_MODEL`。
+- **需要语义记忆召回**：安装 Ollama 后执行 `ollama pull bge-m3`（默认 `OLLAMA_BASE_URL=http://127.0.0.1:11434`），并在 `.env` 设置 `MEMORY_EMBEDDING_MODEL=bge-m3`。首次调用会把模型加载进内存（本机实测约 11 秒，之后单次约 1.3 秒），建议同时设 `MEMORY_EMBEDDING_TIMEOUT_MS=60000`，避免冷启动超时。也可用 `MEMORY_EMBEDDING_BASE_URL` / `MEMORY_EMBEDDING_API_KEY` / `MEMORY_EMBEDDING_MODEL` 指向任意 OpenAI 兼容嵌入服务。⚠️ 更换嵌入提供方或模型会触发全量重嵌入。
