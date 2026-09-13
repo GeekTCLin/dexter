@@ -1,7 +1,16 @@
 {
   "name": "dexter-ts",
   "version": "1.0.4",
-  "description": "Dexter - AI agent for deep financial research.",
+  "description": "Dexter - AI agent for deep financial research (unofficial fork with CLI, local web agent, and China A-share data support).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GeekTCLin/dexter.git"
+  },
+  "homepage": "https://github.com/GeekTCLin/dexter",
+  "bugs": {
+    "url": "https://github.com/GeekTCLin/dexter/issues"
+  },
   "type": "module",
   "main": "src/index.tsx",
   "bin": {

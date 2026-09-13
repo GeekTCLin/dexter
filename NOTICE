@@ -1,0 +1,71 @@
+Dexter — provenance, modifications, and third-party notices
+===========================================================
+
+This repository is an UNOFFICIAL FORK (modified derivative) of:
+
+    virattt/dexter — "An autonomous agent for deep financial research"
+    https://github.com/virattt/dexter
+
+The original project states in its README that it is licensed under the MIT
+License. It does not ship a LICENSE file or an explicit copyright line; this
+repository therefore reproduces the standard MIT text in ./LICENSE and
+attributes the original work to its author (Virat Singh / @virattt).
+
+This fork is not affiliated with, sponsored by, or endorsed by the original
+author or the upstream project. The name "Dexter" is kept only to identify the
+lineage of the code.
+
+Modifications and additions in this fork (Copyright (c) 2026 GeekTCLin)
+---------------------------------------------------------------------------
+- Local web agent: Bun HTTP server (`src/web/`) plus a React/Vite SPA (`web/`)
+  with SSE streaming, tool timeline, tool approvals, ask-user questions,
+  cancel, multi-conversation history, lifecycle notices, and a Chinese UI.
+- China A-share / domestic-market data:
+  * `get_index_snapshot` / `get_index_snapshots` / `get_index_prices`
+    (`src/tools/finance/domestic-index*.ts`)
+  * `domestic_search` (`flash` / `sentiment` / `news` / `announcements`)
+    (`src/tools/search/domestic-search*.ts`)
+- Keyless web search providers (Bing CN, Baidu) with optional Exa / Tavily /
+  LangSearch fallbacks (`src/tools/search/bing.ts`, `baidu.ts`).
+- Conditional gating of US financial-data tools on FINANCIAL_DATASETS_API_KEY.
+- Semantic memory embeddings: placeholder-aware provider selection, a generic
+  OpenAI-compatible provider, failure cooldown, and graceful keyword-only
+  degradation (`src/memory/embeddings.ts`).
+- Additional LLM provider: OpenCode Go (`src/providers.ts`, `src/model/llm.ts`).
+
+Third-party notices
+-------------------
+- Runtime and build dependencies are distributed under their own licenses
+  (predominantly MIT, ISC, BSD and Apache-2.0). See `bun.lock` and each
+  package's `LICENSE` file in `node_modules/`.
+- `@whiskeysockets/libsignal-node`, pulled in transitively by
+  `@whiskeysockets/baileys` for the optional WhatsApp gateway, is licensed
+  under GPL-3.0. It is used as an unmodified library dependency. If you
+  redistribute this project as a bundled binary (rather than as source that
+  the user installs), review your GPL-3.0 obligations, or exclude the
+  WhatsApp gateway from the bundle.
+- `@img/sharp-*` platform binaries (transitive, optional) are licensed under
+  Apache-2.0 AND LGPL-3.0-or-later.
+
+Data sources and terms of use
+-----------------------------
+This software fetches data from third-party websites and APIs at runtime. The
+software license (MIT) covers THIS CODE ONLY. It does not grant any rights to
+third-party data, and it does not override any provider's terms.
+
+- Eastmoney (东方财富), Cailianpress (财联社), Sina (新浪财经), Tencent
+  (腾讯) and Bing/Baidu endpoints used here are undocumented public web
+  interfaces. Their site terms, robots/exclusion policies and copyright rules
+  apply to your use of them. Commercial use or redistribution of the data may
+  require a license from the exchange or the data vendor.
+- CNINFO (巨潮资讯) is the official public-disclosure platform for mainland
+  China listed companies; its content is regulator-mandated public disclosure,
+  but bulk extraction may still be restricted by the site's terms.
+- `financialdatasets.ai` is accessed under your own API key and contract.
+  Redistribution of its data is limited to plans that expressly include data
+  redistribution. Review their terms before publishing outputs.
+- You are responsible for complying with each provider's Terms of Service,
+  robots.txt, and applicable law (including personal-information rules for
+  user-generated content).
+
+Nothing in this file is legal advice.
