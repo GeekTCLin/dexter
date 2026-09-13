@@ -13,6 +13,7 @@ import { DEFAULT_SYSTEM_PROMPT } from '@/agent/prompts';
 import type { TokenUsage } from '@/agent/types';
 import { logger } from '@/utils';
 import { classifyError, isNonRetryableError } from '@/utils/errors';
+import { checkApiKeyExists } from '@/utils/env.js';
 import { resolveProvider, getProviderById } from '@/providers';
 
 export const DEFAULT_PROVIDER = 'openai';
@@ -59,9 +60,11 @@ interface ModelOpts {
 
 type ModelFactory = (name: string, opts: ModelOpts) => BaseChatModel;
 
-function getApiKey(envVar: string): string {
+export function getApiKey(envVar: string): string {
   const apiKey = process.env[envVar];
-  if (!apiKey) {
+  // Treat empty and `your-...` placeholder values as missing via the shared
+  // check so a placeholder never reaches a provider request.
+  if (!apiKey || !checkApiKeyExists(envVar)) {
     throw new Error(`[LLM] ${envVar} not found in environment variables`);
   }
   return apiKey;
@@ -151,7 +154,9 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
       ...(process.env.OLLAMA_BASE_URL ? { baseUrl: process.env.OLLAMA_BASE_URL } : {}),
     }),
   'ollama-cloud': (name, opts) => {
-    const apiKey = process.env.OLLAMA_CLOUD_API_KEY;
+    const apiKey = checkApiKeyExists('OLLAMA_CLOUD_API_KEY')
+      ? process.env.OLLAMA_CLOUD_API_KEY
+      : undefined;
     return new ChatOllama({
       model: name.replace(/^ollama-cloud:/, ''),
       ...opts,

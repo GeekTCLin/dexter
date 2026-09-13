@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { formatToolResult } from '../types.js';
 import { logger } from '@/utils';
+import { checkApiKeyExists } from '@/utils/env.js';
 
 const LANGSEARCH_API_URL = 'https://api.langsearch.com/v1/web-search';
 
@@ -27,7 +28,7 @@ interface LangSearchResponse {
 
 async function callLangSearch(query: string): Promise<LangSearchResponse> {
   const apiKey = process.env.LANGSEARCH_API_KEY;
-  if (!apiKey) {
+  if (!apiKey || !checkApiKeyExists('LANGSEARCH_API_KEY')) {
     throw new Error('[LangSearch API] LANGSEARCH_API_KEY is not set');
   }
 

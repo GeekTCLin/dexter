@@ -1,5 +1,6 @@
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
+import { checkApiKeyExists } from '@/utils/env.js';
 import { formatToolResult } from '../types.js';
 
 const X_API_BASE = 'https://api.x.com/2';
@@ -36,9 +37,13 @@ interface RawXResponse {
   errors?: unknown[];
 }
 
-function getBearerToken(): string {
+export function getBearerToken(): string {
   const token = process.env.X_BEARER_TOKEN;
-  if (!token) throw new Error('X_BEARER_TOKEN is not set');
+  // Treat empty and `your-...` placeholder values as unset via the shared check
+  // so a placeholder fails fast here instead of at the network layer.
+  if (!token || !checkApiKeyExists('X_BEARER_TOKEN')) {
+    throw new Error('X_BEARER_TOKEN is not set');
+  }
   return token;
 }
 

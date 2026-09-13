@@ -1,5 +1,6 @@
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { AgentRunnerController } from './agent-runner.js';
+import { waitFor } from './agent-runner-test-helpers.js';
 import { InMemoryChatHistory } from '../utils/in-memory-chat-history.js';
 import type { AgentConfig, AgentEvent } from '../agent/types.js';
 import type { Question } from '../tools/ask-user-question/types.js';
@@ -52,7 +53,7 @@ describe('AgentRunnerController — question flow', () => {
     expect(controller.pendingQuestion).toBeNull();
 
     const runPromise = controller.runQuery('test');
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => controller.pendingQuestion !== null, 'pending question');
 
     expect(controller.pendingQuestion).not.toBeNull();
     expect(controller.pendingQuestion?.questions[0].header).toBe('Ticker');
@@ -65,7 +66,7 @@ describe('AgentRunnerController — question flow', () => {
   test('respondToQuestion clears pendingQuestion and completes the run', async () => {
     const controller = createController();
     const runPromise = controller.runQuery('test');
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => controller.pendingQuestion !== null, 'pending question');
 
     controller.respondToQuestion({
       answers: [{ header: 'Ticker', question: 'Which ticker?', selected: ['AAPL'] }],
@@ -79,7 +80,7 @@ describe('AgentRunnerController — question flow', () => {
   test('cancelExecution unblocks a pending question (declined) without hanging', async () => {
     const controller = createController();
     const runPromise = controller.runQuery('test');
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => controller.pendingQuestion !== null, 'pending question');
 
     expect(controller.pendingQuestion).not.toBeNull();
 

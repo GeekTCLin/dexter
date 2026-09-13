@@ -1,5 +1,6 @@
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { AgentRunnerController } from './agent-runner.js';
+import { waitFor } from './agent-runner-test-helpers.js';
 import { InMemoryChatHistory } from '../utils/in-memory-chat-history.js';
 import type { AgentConfig, AgentEvent, ApprovalDecision } from '../agent/types.js';
 
@@ -82,8 +83,8 @@ describe('AgentRunnerController', () => {
 
       const runPromise = controller.runQuery('test query');
 
-      // Wait a tick for the async agent.run() to start
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // Wait until the agent generator has registered its approval resolver.
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(controller.pendingApproval).not.toBeNull();
       expect(controller.pendingApproval?.tool).toBe('write_file');
@@ -103,8 +104,8 @@ describe('AgentRunnerController', () => {
 
       const runPromise = controller.runQuery('test query');
 
-      // Wait a tick for the async agent.run() to start
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // Wait until the agent generator has registered its approval resolver.
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(getChangeCount()).toBeGreaterThan(initialCount);
 
@@ -117,7 +118,7 @@ describe('AgentRunnerController', () => {
       const { controller } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(controller.pendingApproval).not.toBeNull();
 
@@ -131,7 +132,7 @@ describe('AgentRunnerController', () => {
       const { controller } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(controller.pendingApproval).not.toBeNull();
 
@@ -145,7 +146,7 @@ describe('AgentRunnerController', () => {
       const { controller, getChangeCount } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       const countAfterEnter = getChangeCount();
 
@@ -159,7 +160,7 @@ describe('AgentRunnerController', () => {
       const { controller, getChangeCount } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       const countAfterEnter = getChangeCount();
 
@@ -175,7 +176,7 @@ describe('AgentRunnerController', () => {
       const { controller } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(controller.pendingApproval).not.toBeNull();
 
@@ -189,7 +190,7 @@ describe('AgentRunnerController', () => {
       const { controller, getChangeCount } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       const countBeforeCancel = getChangeCount();
 
@@ -203,7 +204,7 @@ describe('AgentRunnerController', () => {
       const { controller } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(controller.workingState.status).toBe('approval');
 
@@ -229,7 +230,7 @@ describe('AgentRunnerController', () => {
       const { controller } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       expect(controller.workingState.status).toBe('approval');
 
@@ -244,7 +245,7 @@ describe('AgentRunnerController', () => {
       const { controller } = createController();
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       controller.respondToApproval('deny');
       await runPromise;
@@ -261,7 +262,7 @@ describe('AgentRunnerController', () => {
       grants.add('file:write');
 
       const runPromise = controller.runQuery('test query');
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await waitFor(() => controller.pendingApproval !== null, 'pending approval');
 
       // bash grant pruned at query start; file:write preserved.
       expect(grants.has('bash:Bash(ls:*)')).toBe(false);

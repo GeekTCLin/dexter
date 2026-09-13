@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { xApiGet } from './x-search.js';
+import { getBearerToken, xApiGet } from './x-search.js';
 
 // Minimal Response stand-in for the fields xApiGet reads.
 function makeResponse(opts: {
@@ -92,5 +92,32 @@ describe('xApiGet rate-limit handling', () => {
     );
     expect(calls).toBe(1); // threw immediately, no retry
     expect(waited).toBe(false); // never slept
+  });
+});
+
+describe('getBearerToken placeholder handling', () => {
+  const originalToken = process.env.X_BEARER_TOKEN;
+
+  afterEach(() => {
+    if (originalToken === undefined) {
+      delete process.env.X_BEARER_TOKEN;
+    } else {
+      process.env.X_BEARER_TOKEN = originalToken;
+    }
+  });
+
+  test('treats a `your-...` placeholder as unset', () => {
+    process.env.X_BEARER_TOKEN = 'your-x-bearer-token';
+    expect(() => getBearerToken()).toThrow('X_BEARER_TOKEN is not set');
+  });
+
+  test('treats an empty value as unset', () => {
+    process.env.X_BEARER_TOKEN = '';
+    expect(() => getBearerToken()).toThrow('X_BEARER_TOKEN is not set');
+  });
+
+  test('accepts a real token', () => {
+    process.env.X_BEARER_TOKEN = 'test-real-token';
+    expect(getBearerToken()).toBe('test-real-token');
   });
 });
