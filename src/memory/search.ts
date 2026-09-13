@@ -2,6 +2,7 @@ import { buildSnippet } from './chunker.js';
 import { embedSingleQuery } from './embeddings.js';
 import { applyTemporalDecay } from './temporal-decay.js';
 import { applyMMRToHybridResults } from './mmr.js';
+import { logger } from '../utils/logger.js';
 import type { MemoryDatabase } from './database.js';
 import type {
   MemoryEmbeddingClient,
@@ -46,7 +47,18 @@ export async function hybridSearch(params: {
   const minScore = params.options?.minScore ?? params.defaults.minScore;
   const candidateCount = maxResults * 4;
 
-  const queryEmbedding = await embedSingleQuery(params.embeddingClient, params.query);
+  let queryEmbedding: number[] | null = null;
+  try {
+    queryEmbedding = await embedSingleQuery(params.embeddingClient, params.query);
+  } catch (error) {
+    // Embeddings are an optimization: never let a provider failure break search.
+    // embedSingleQuery already times out; on any failure fall back to keyword-only.
+    logger.warn('Memory vector search failed; falling back to keyword-only', {
+      provider: params.embeddingClient?.provider ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    queryEmbedding = null;
+  }
   const vectorCandidates = queryEmbedding ? params.db.searchVector(queryEmbedding, candidateCount) : [];
   const keywordCandidates = params.db.searchKeyword(params.query, candidateCount);
 

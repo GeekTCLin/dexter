@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { dexterPath } from './paths.js';
+// Type-only import (erased at runtime) so the settings key can't drift from the
+// canonical provider union without a cycle.
+import type { EmbeddingProviderId } from '../memory/types.js';
 
 const SETTINGS_FILE = dexterPath('settings.json');
 
@@ -30,7 +33,7 @@ interface Config {
   webSearchPreferredProvider?: 'exa' | 'perplexity' | 'tavily';
   memory?: {
     enabled?: boolean;
-    embeddingProvider?: 'openai' | 'gemini' | 'ollama' | 'auto';
+    embeddingProvider?: EmbeddingProviderId;
     embeddingModel?: string;
     maxSessionContextTokens?: number;
   };

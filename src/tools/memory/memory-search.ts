@@ -39,6 +39,15 @@ export const memorySearchTool = new DynamicStructuredTool({
     }
 
     const results = await manager.search(input.query);
+    const embedding = manager.getEmbeddingStatus();
+    if (embedding.provider === null) {
+      // Vector search unavailable → keyword-only. Surface a readable hint without
+      // changing the success-path payload.
+      return formatToolResult({
+        results,
+        embeddingNotice: `（向量检索未启用：${embedding.reason ?? '未配置可用嵌入提供方'}，已按关键词检索；可安装本地 Ollama 并 ollama pull bge-m3，或配置 MEMORY_EMBEDDING_BASE_URL）`,
+      });
+    }
     return formatToolResult({
       results,
     });

@@ -1,5 +1,5 @@
 import { MemoryDatabase } from './database.js';
-import { createEmbeddingClient } from './embeddings.js';
+import { createEmbeddingClient, getEmbeddingStatus } from './embeddings.js';
 import { MemoryIndexer } from './indexer.js';
 import { hybridSearch } from './search.js';
 import { MemoryStore } from './store.js';
@@ -125,6 +125,15 @@ export class MemoryManager {
       return 'Memory is disabled in settings.';
     }
     return this.initError;
+  }
+
+  /**
+   * Current embedding-provider status. `provider` is null when vector search is
+   * unavailable (nothing configured, disabled, or a provider cooling down after a
+   * failure) and `reason` then carries a user-facing explanation.
+   */
+  getEmbeddingStatus(): { provider: string | null; reason: string | null } {
+    return getEmbeddingStatus(this.config.embeddingProvider);
   }
 
   async sync(options?: { force?: boolean }): Promise<void> {

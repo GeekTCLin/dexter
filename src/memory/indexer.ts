@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import type { MemoryDatabase } from './database.js';
 import { chunkMemoryText } from './chunker.js';
 import { parseSessionTranscripts } from './session-files.js';
+import { logger } from '../utils/logger.js';
 import type { MemoryEmbeddingClient, MemorySyncStats } from './types.js';
 import { MemoryStore } from './store.js';
 
@@ -211,7 +212,17 @@ export class MemoryIndexer {
     const uncached = chunks.filter((chunk) => !this.db.getCachedEmbedding(chunk.contentHash));
     let uncachedVectors: number[][] = [];
     if (uncached.length > 0 && this.options.embeddingClient) {
-      uncachedVectors = await this.options.embeddingClient.embed(uncached.map((chunk) => chunk.content));
+      try {
+        uncachedVectors = await this.options.embeddingClient.embed(uncached.map((chunk) => chunk.content));
+      } catch (error) {
+        // Embedding is best-effort: index the chunks without vectors so they are
+        // still retrievable via keyword search instead of failing the whole sync.
+        uncachedVectors = [];
+        logger.warn('Memory indexing: embedding failed; indexing chunks without vectors', {
+          provider: this.options.embeddingClient.provider,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     const uncachedMap = new Map<string, number[]>();
