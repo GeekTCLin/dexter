@@ -4,6 +4,7 @@ import { dexterPath } from './paths.js';
 // Type-only import (erased at runtime) so the settings key can't drift from the
 // canonical provider union without a cycle.
 import type { EmbeddingProviderId } from '../memory/types.js';
+import type { SearchProviderId } from './env.js';
 
 const SETTINGS_FILE = dexterPath('settings.json');
 
@@ -30,7 +31,7 @@ interface Config {
   provider?: string;
   modelId?: string;  // Selected model ID (e.g., "gpt-5.6-sol", "ollama:llama3.1")
   model?: string;    // Legacy key, kept for migration
-  webSearchPreferredProvider?: 'exa' | 'perplexity' | 'tavily';
+  webSearchPreferredProvider?: SearchProviderId;
   memory?: {
     enabled?: boolean;
     embeddingProvider?: EmbeddingProviderId;

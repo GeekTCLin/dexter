@@ -12,8 +12,9 @@ import type { SearchProviderId } from "../types";
 
 /** Mirrors SEARCH_PROVIDERS in src/utils/env.ts. */
 const SEARCH_PROVIDER_OPTIONS: Array<{ id: SearchProviderId; name: string }> = [
+  { id: "bing", name: "Bing（国内）" },
+  { id: "baidu", name: "百度" },
   { id: "exa", name: "Exa" },
-  { id: "perplexity", name: "Perplexity" },
   { id: "tavily", name: "Tavily" },
   { id: "langsearch", name: "LangSearch" },
 ];

@@ -3,6 +3,7 @@ import {
   checkApiKeyForSearchProvider,
   getSearchProviderDisplayName,
   saveApiKeyForSearchProvider,
+  SEARCH_PROVIDERS,
   type SearchProviderId,
 } from '../utils/env.js';
 
@@ -18,7 +19,11 @@ export interface SearchSelectionState {
 
 type ChangeListener = () => void;
 
-const DEFAULT_PREFERRED: SearchProviderId = 'exa';
+const DEFAULT_PREFERRED: SearchProviderId = 'bing';
+
+function isSearchProviderId(value: unknown): value is SearchProviderId {
+  return typeof value === 'string' && value in SEARCH_PROVIDERS;
+}
 
 export class SearchSelectionController {
   private preferredProviderValue: SearchProviderId;
@@ -31,7 +36,9 @@ export class SearchSelectionController {
     this.onError = onError;
     this.onChange = onChange;
     const saved = getSetting<SearchProviderId | undefined>('webSearchPreferredProvider', undefined);
-    this.preferredProviderValue = saved ?? DEFAULT_PREFERRED;
+    // Fall back to the default when the stored value is stale/unknown (e.g. the
+    // removed 'perplexity' provider).
+    this.preferredProviderValue = isSearchProviderId(saved) ? saved : DEFAULT_PREFERRED;
   }
 
   get state(): SearchSelectionState {
@@ -63,6 +70,8 @@ export class SearchSelectionController {
   handleProviderSelect(providerId: SearchProviderId) {
     this.pendingProviderValue = providerId;
 
+    // Keyless providers (Bing/Baidu) report as available, so they commit without
+    // entering the API-key flow.
     if (checkApiKeyForSearchProvider(providerId)) {
       this.commitPreference(providerId);
       return;

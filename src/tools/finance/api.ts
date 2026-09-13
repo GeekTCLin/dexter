@@ -1,7 +1,17 @@
 import { readCache, writeCache, describeRequest } from '../../utils/cache.js';
 import { logger } from '../../utils/logger.js';
+import { checkApiKeyExists } from '../../utils/env.js';
 
 const BASE_URL = 'https://api.financialdatasets.ai';
+
+/**
+ * Whether the financialdatasets.ai API key is configured. Tools that depend on
+ * this provider must not be exposed to the model when it is absent, otherwise
+ * every call fails.
+ */
+export function isFinancialDatasetsConfigured(): boolean {
+  return checkApiKeyExists('FINANCIAL_DATASETS_API_KEY');
+}
 
 export interface ApiResponse {
   data: Record<string, unknown>;

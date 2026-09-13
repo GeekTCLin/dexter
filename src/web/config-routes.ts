@@ -24,6 +24,13 @@ interface ConfigResponse {
   hasApiKey: boolean;
 }
 
+const DEFAULT_SEARCH_PROVIDER: SearchProviderId = 'bing';
+
+function resolveSearchProvider(value: string | undefined): SearchProviderId {
+  // Stored values may be stale/unknown (e.g. the removed 'perplexity'); fall back.
+  return value && value in SEARCH_PROVIDERS ? (value as SearchProviderId) : DEFAULT_SEARCH_PROVIDER;
+}
+
 function buildConfig(): ConfigResponse {
   const provider = getSetting('provider', DEFAULT_PROVIDER);
   const savedModel = getSetting<string | null>('modelId', null);
@@ -32,7 +39,9 @@ function buildConfig(): ConfigResponse {
     id: model.id,
     name: model.displayName,
   }));
-  const searchProvider = getSetting<SearchProviderId>('webSearchPreferredProvider', 'exa');
+  const searchProvider = resolveSearchProvider(
+    getSetting<string | undefined>('webSearchPreferredProvider', undefined),
+  );
   const memoryEnabled =
     getSetting<{ enabled?: boolean } | undefined>('memory', undefined)?.enabled ?? true;
 

@@ -244,7 +244,7 @@ export interface ConversationMessage {
 
 /* ─── Config Types (mirrors src/web/config-routes.ts ConfigResponse) ─── */
 
-export type SearchProviderId = "exa" | "perplexity" | "tavily" | "langsearch";
+export type SearchProviderId = "bing" | "baidu" | "exa" | "tavily" | "langsearch";
 
 export interface DexterConfig {
   provider: string;

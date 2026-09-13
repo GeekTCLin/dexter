@@ -100,27 +100,40 @@ export function saveApiKeyForProvider(providerId: string, apiKey: string): boole
   return saveApiKeyToEnv(apiKeyName, apiKey);
 }
 
-export type SearchProviderId = 'exa' | 'perplexity' | 'tavily' | 'langsearch';
+export type SearchProviderId = 'bing' | 'baidu' | 'exa' | 'tavily' | 'langsearch';
 
-export const SEARCH_PROVIDERS: Record<SearchProviderId, { displayName: string; apiKeyEnvVar: string }> = {
+export const SEARCH_PROVIDERS: Record<
+  SearchProviderId,
+  { displayName: string; apiKeyEnvVar?: string }
+> = {
+  bing: { displayName: 'Bing (国内)', apiKeyEnvVar: undefined },
+  baidu: { displayName: '百度', apiKeyEnvVar: undefined },
   exa: { displayName: 'Exa', apiKeyEnvVar: 'EXASEARCH_API_KEY' },
-  perplexity: { displayName: 'Perplexity', apiKeyEnvVar: 'PERPLEXITY_API_KEY' },
   tavily: { displayName: 'Tavily', apiKeyEnvVar: 'TAVILY_API_KEY' },
   langsearch: { displayName: 'LangSearch', apiKeyEnvVar: 'LANGSEARCH_API_KEY' },
 };
+
+/** Providers that need no API key and are always usable. */
+export const KEYLESS_SEARCH_PROVIDERS: SearchProviderId[] = ['bing', 'baidu'];
 
 export function getSearchProviderDisplayName(providerId: SearchProviderId): string {
   return SEARCH_PROVIDERS[providerId].displayName;
 }
 
-export function getApiKeyNameForSearchProvider(providerId: SearchProviderId): string {
+export function getApiKeyNameForSearchProvider(providerId: SearchProviderId): string | undefined {
   return SEARCH_PROVIDERS[providerId].apiKeyEnvVar;
 }
 
 export function checkApiKeyForSearchProvider(providerId: SearchProviderId): boolean {
-  return checkApiKeyExists(SEARCH_PROVIDERS[providerId].apiKeyEnvVar);
+  const apiKeyEnvVar = SEARCH_PROVIDERS[providerId].apiKeyEnvVar;
+  // Keyless providers are always available.
+  if (!apiKeyEnvVar) return true;
+  return checkApiKeyExists(apiKeyEnvVar);
 }
 
 export function saveApiKeyForSearchProvider(providerId: SearchProviderId, apiKey: string): boolean {
-  return saveApiKeyToEnv(SEARCH_PROVIDERS[providerId].apiKeyEnvVar, apiKey);
+  const apiKeyEnvVar = SEARCH_PROVIDERS[providerId].apiKeyEnvVar;
+  // Nothing to persist for keyless providers.
+  if (!apiKeyEnvVar) return false;
+  return saveApiKeyToEnv(apiKeyEnvVar, apiKey);
 }

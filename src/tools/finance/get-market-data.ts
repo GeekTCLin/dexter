@@ -7,10 +7,11 @@ import { formatToolResult } from '../types.js';
 import { getCurrentDate } from '../../agent/prompts.js';
 import { withTimeout, SUB_TOOL_TIMEOUT_MS } from './utils.js';
 import { MARKET_DATA_FORMATTERS } from './formatters.js';
+import { isFinancialDatasetsConfigured } from './api.js';
 
 /**
- * Rich description for the get_market_data tool.
- * Used in the system prompt to guide the LLM on when and how to use this tool.
+ * Rich description for the get_market_data tool when financialdatasets.ai is
+ * configured. Used in the system prompt to guide the LLM.
  */
 export const GET_MARKET_DATA_DESCRIPTION = `
 Intelligent meta-tool for retrieving market data including prices, news, and insider activity. Takes a natural language query and automatically routes to appropriate market data sources.
@@ -52,6 +53,42 @@ Intelligent meta-tool for retrieving market data including prices, news, and ins
 - Returns structured JSON data with source URLs for verification
 `.trim();
 
+/**
+ * Rich description for the get_market_data tool when financialdatasets.ai is
+ * NOT configured. It only advertises the key-free China A-share index
+ * capability, and never references tools that are not registered in that state.
+ */
+export const GET_MARKET_DATA_DESCRIPTION_INDEX_ONLY = `
+Intelligent meta-tool for retrieving China A-share domestic market index data. Takes a natural language query and automatically routes to the appropriate index data source.
+
+## When to Use
+
+- China A-share domestic index snapshots (上证综指, 深证成指, 创业板指, 沪深300, 中证500, 科创50, 中证1000, 上证50, 上证180)
+- Major China A-share index overviews ("今天大盘怎么样")
+- Historical China A-share domestic index prices (daily/weekly/monthly K-line)
+
+## When NOT to Use
+
+- General web searches (use web_search)
+- Questions that don't require external financial data (answer directly from knowledge)
+
+## Usage Notes
+
+- Call ONCE with the complete natural language query - the tool handles complexity internally
+- Handles index name/alias resolution (上证综指, 沪深300, 000001.SH)
+- Handles date inference (e.g., "last month", "past year", "YTD")
+- Returns structured JSON data with source URLs for verification
+`.trim();
+
+/**
+ * Select the rich get_market_data description for the current configuration.
+ */
+export function getMarketDataDescription(): string {
+  return isFinancialDatasetsConfigured()
+    ? GET_MARKET_DATA_DESCRIPTION
+    : GET_MARKET_DATA_DESCRIPTION_INDEX_ONLY;
+}
+
 /** Format snake_case tool name to Title Case for progress messages */
 function formatSubToolName(name: string): string {
   return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -70,6 +107,15 @@ import { getIndexSnapshot, getIndexSnapshots, getIndexPrices } from './domestic-
 // All market data tools available for routing. Built per-instance because
 // get_insider_trades needs the model for its LLM name-resolution fallback.
 function buildMarketDataTools(model: string): StructuredToolInterface[] {
+  // China A-share domestic indices are key-free, so they are always bound.
+  const indexTools = [getIndexSnapshot, getIndexSnapshots, getIndexPrices];
+
+  // U.S. equities/crypto go through financialdatasets.ai and require the API
+  // key; without it they fail on every call, so they are never bound.
+  if (!isFinancialDatasetsConfigured()) {
+    return indexTools;
+  }
+
   return [
     // Stock Prices
     getStockPrice,
@@ -87,14 +133,53 @@ function buildMarketDataTools(model: string): StructuredToolInterface[] {
     getInstitutionalHoldings,
     getBeneficialOwnership,
     // China A-share Domestic Indices
-    getIndexSnapshot,
-    getIndexSnapshots,
-    getIndexPrices,
+    ...indexTools,
   ];
+}
+
+/**
+ * Names of the sub-tools get_market_data may route to under the current
+ * configuration. Exposed so callers/tests can assert the enabled capability
+ * set without invoking the router LLM.
+ */
+export function getMarketDataSubToolNames(model: string): string[] {
+  return buildMarketDataTools(model).map((t) => t.name);
 }
 
 // Build the router system prompt for market data
 function buildRouterPrompt(): string {
+  // Without the financialdatasets.ai key, the U.S./crypto sub-tools are not
+  // bound, so the router prompt must not mention them or their tickers.
+  if (!isFinancialDatasetsConfigured()) {
+    return `You are a market data routing assistant.
+Current date: ${getCurrentDate()}
+
+Given a user's natural language query about market data, call the appropriate tool(s).
+
+## Guidelines
+
+1. **Date Inference**: Use schema-supported filters for date ranges:
+   - "last month" → start_date 1 month ago, end_date today
+   - "past year" → start_date 1 year ago, end_date today
+   - "YTD" → start_date Jan 1 of current year, end_date today
+   - "2024" → start_date 2024-01-01, end_date 2024-12-31
+
+2. **Tool Selection**:
+   - For a single China A-share domestic index quote (上证综指, 深证成指, 沪深300, 中证500, 科创50, 中证1000, etc.) → get_index_snapshot
+   - For "今天A股主要指数 / 大盘概览" or an overview of major China indices → get_index_snapshots
+   - For China domestic index history, trend or range performance (日/周/月 K线) → get_index_prices
+   - A-share / China domestic indices MUST use the get_index_* tools, NEVER get_stock_price (which only covers US equities).
+
+3. **Efficiency**:
+   - For current/latest price, use snapshot tools (not historical with limit 1)
+   - For comparisons between assets, call the same tool for each ticker
+   - Use the smallest date range that answers the question
+
+Note: 美股/加密数据未配置 (U.S. equities and crypto are not configured), so only China A-share domestic indices are supported.
+
+Call the appropriate tool(s) now.`;
+  }
+
   return `You are a market data routing assistant.
 Current date: ${getCurrentDate()}
 
@@ -158,7 +243,10 @@ export function createGetMarketData(model: string): DynamicStructuredTool {
   const marketDataToolMap = new Map(marketDataTools.map(t => [t.name, t]));
   return new DynamicStructuredTool({
     name: 'get_market_data',
-    description: `Intelligent meta-tool for retrieving market data including prices, news, and insider activity. Takes a natural language query and automatically routes to appropriate market data tools. Use for:
+    // Only advertise the capabilities that are actually bound; U.S./crypto
+    // sub-tools are absent when financialdatasets.ai is not configured.
+    description: isFinancialDatasetsConfigured()
+      ? `Intelligent meta-tool for retrieving market data including prices, news, and insider activity. Takes a natural language query and automatically routes to appropriate market data tools. Use for:
 - Current and historical stock prices
 - Current and historical cryptocurrency prices
 - China A-share domestic index quotes and historical prices
@@ -168,7 +256,10 @@ export function createGetMarketData(model: string): DynamicStructuredTool {
 - Insider trading activity
 - Insider ownership statements (Forms 3/5)
 - Institutional holdings (SEC 13F)
-- Beneficial ownership and activist stakes (SEC 13D/13G)`,
+- Beneficial ownership and activist stakes (SEC 13D/13G)`
+      : `Intelligent meta-tool for retrieving China A-share domestic index data. Takes a natural language query and automatically routes to appropriate index tools. Use for:
+- China A-share domestic index quotes (实时快照、批量概览)
+- China A-share domestic index historical prices (日/周/月 K线)`,
     schema: GetMarketDataInputSchema,
     func: async (input, _runManager, config?: RunnableConfig) => {
       const onProgress = config?.metadata?.onProgress as ((msg: string) => void) | undefined;

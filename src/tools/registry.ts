@@ -1,9 +1,9 @@
 import { StructuredToolInterface } from '@langchain/core/tools';
 import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks } from './finance/index.js';
-import { exaSearch, perplexitySearch, tavilySearch, langSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION, domesticSearchTool, DOMESTIC_SEARCH_DESCRIPTION } from './search/index.js';
+import { exaSearch, tavilySearch, langSearch, bingSearch, baiduSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION, domesticSearchTool, DOMESTIC_SEARCH_DESCRIPTION } from './search/index.js';
 import { createWebSearchTool, type WebSearchProvider } from './search/web-search.js';
 import { getSetting } from '../utils/config.js';
-import type { SearchProviderId } from '../utils/env.js';
+import { checkApiKeyExists, type SearchProviderId } from '../utils/env.js';
 import { skillTool, SKILL_TOOL_DESCRIPTION } from './skill.js';
 import { createWebFetch, WEB_FETCH_DESCRIPTION } from './fetch/web-fetch.js';
 import { browserTool, BROWSER_DESCRIPTION } from './browser/browser.js';
@@ -11,7 +11,8 @@ import { readFileTool, READ_FILE_DESCRIPTION } from './filesystem/read-file.js';
 import { writeFileTool, WRITE_FILE_DESCRIPTION } from './filesystem/write-file.js';
 import { editFileTool, EDIT_FILE_DESCRIPTION } from './filesystem/edit-file.js';
 import { GET_FINANCIALS_DESCRIPTION } from './finance/get-financials.js';
-import { GET_MARKET_DATA_DESCRIPTION } from './finance/get-market-data.js';
+import { getMarketDataDescription } from './finance/get-market-data.js';
+import { isFinancialDatasetsConfigured } from './finance/api.js';
 import { READ_FILINGS_DESCRIPTION } from './finance/read-filings.js';
 import { SCREEN_STOCKS_DESCRIPTION } from './finance/screen-stocks.js';
 import { heartbeatTool, HEARTBEAT_TOOL_DESCRIPTION } from './heartbeat/heartbeat-tool.js';
@@ -39,6 +40,31 @@ export interface RegisteredTool {
 }
 
 /**
+ * Build the ordered web_search fallback chain.
+ *
+ * Bing (CN) and Baidu need no key and always lead; Exa/Tavily/LangSearch are
+ * appended only when a real key (not a `your-...` placeholder) is configured.
+ * `WEB_SEARCH_DISABLED=1` opts the whole tool out. Exported for tests/diagnostics.
+ */
+export function buildWebSearchProviders(): WebSearchProvider[] {
+  const providers: WebSearchProvider[] = [];
+  if (process.env.WEB_SEARCH_DISABLED === '1') return providers;
+
+  providers.push({ id: 'bing', name: 'Bing', tool: bingSearch });
+  providers.push({ id: 'baidu', name: 'Baidu', tool: baiduSearch });
+  if (checkApiKeyExists('EXASEARCH_API_KEY')) {
+    providers.push({ id: 'exa', name: 'Exa', tool: exaSearch });
+  }
+  if (checkApiKeyExists('TAVILY_API_KEY')) {
+    providers.push({ id: 'tavily', name: 'Tavily', tool: tavilySearch });
+  }
+  if (checkApiKeyExists('LANGSEARCH_API_KEY')) {
+    providers.push({ id: 'langsearch', name: 'LangSearch', tool: langSearch });
+  }
+  return providers;
+}
+
+/**
  * Get all registered tools with their descriptions.
  * Conditionally includes tools based on environment configuration.
  *
@@ -46,35 +72,49 @@ export interface RegisteredTool {
  * @returns Array of registered tools
  */
 export function getToolRegistry(model: string): RegisteredTool[] {
+  // financialdatasets.ai-backed tools are only exposed when a real key is
+  // configured; otherwise every call would fail, so they stay unregistered.
+  const financialDatasetsConfigured = isFinancialDatasetsConfigured();
+
   const tools: RegisteredTool[] = [
-    {
-      name: 'get_financials',
-      tool: createGetFinancials(model),
-      description: GET_FINANCIALS_DESCRIPTION,
-      compactDescription: 'Financial statements and metrics. Handles multi-company/multi-metric queries in one call.',
-      concurrencySafe: true,
-    },
+    ...(financialDatasetsConfigured
+      ? [
+          {
+            name: 'get_financials',
+            tool: createGetFinancials(model),
+            description: GET_FINANCIALS_DESCRIPTION,
+            compactDescription: 'Financial statements and metrics. Handles multi-company/multi-metric queries in one call.',
+            concurrencySafe: true,
+          },
+        ]
+      : []),
     {
       name: 'get_market_data',
       tool: createGetMarketData(model),
-      description: GET_MARKET_DATA_DESCRIPTION,
-      compactDescription: 'Stock/crypto prices, company news, and insider trades/ownership. Handles multi-asset queries in one call.',
+      description: getMarketDataDescription(),
+      compactDescription: financialDatasetsConfigured
+        ? 'Stock/crypto prices, company news, and insider trades/ownership. Handles multi-asset queries in one call.'
+        : 'China A-share domestic index quotes and historical prices (no key).',
       concurrencySafe: true,
     },
-    {
-      name: 'read_filings',
-      tool: createReadFilings(model),
-      description: READ_FILINGS_DESCRIPTION,
-      compactDescription: 'SEC filings (10-K, 10-Q, 8-K). Extracts and summarizes specific filing sections.',
-      concurrencySafe: true,
-    },
-    {
-      name: 'stock_screener',
-      tool: createScreenStocks(model),
-      description: SCREEN_STOCKS_DESCRIPTION,
-      compactDescription: 'Screen stocks by financial criteria (P/E, growth, margins, etc.).',
-      concurrencySafe: true,
-    },
+    ...(financialDatasetsConfigured
+      ? [
+          {
+            name: 'read_filings',
+            tool: createReadFilings(model),
+            description: READ_FILINGS_DESCRIPTION,
+            compactDescription: 'SEC filings (10-K, 10-Q, 8-K). Extracts and summarizes specific filing sections.',
+            concurrencySafe: true,
+          },
+          {
+            name: 'stock_screener',
+            tool: createScreenStocks(model),
+            description: SCREEN_STOCKS_DESCRIPTION,
+            compactDescription: 'Screen stocks by financial criteria (P/E, growth, margins, etc.).',
+            concurrencySafe: true,
+          },
+        ]
+      : []),
     {
       name: 'spawn_subagent',
       tool: createSpawnSubagent(model),
@@ -161,21 +201,10 @@ export function getToolRegistry(model: string): RegisteredTool[] {
     },
   ];
 
-  // Build web_search as a fallback chain over whichever providers have keys configured.
-  // The user's preferred provider (set via /search) is tried first; the others act as fallbacks.
-  const allWebSearchProviders: WebSearchProvider[] = [];
-  if (process.env.EXASEARCH_API_KEY) {
-    allWebSearchProviders.push({ id: 'exa', name: 'Exa', tool: exaSearch });
-  }
-  if (process.env.PERPLEXITY_API_KEY) {
-    allWebSearchProviders.push({ id: 'perplexity', name: 'Perplexity', tool: perplexitySearch });
-  }
-  if (process.env.TAVILY_API_KEY) {
-    allWebSearchProviders.push({ id: 'tavily', name: 'Tavily', tool: tavilySearch });
-  }
-  if (process.env.LANGSEARCH_API_KEY) {
-    allWebSearchProviders.push({ id: 'langsearch', name: 'LangSearch', tool: langSearch });
-  }
+  // Build web_search as a fallback chain. Bing (CN) and Baidu are keyless and
+  // always first; overseas providers with a real key configured are appended as
+  // fallbacks. The user's preferred provider (set via /search) is tried first.
+  const allWebSearchProviders = buildWebSearchProviders();
 
   if (allWebSearchProviders.length > 0) {
     const preferred = getSetting<SearchProviderId | undefined>('webSearchPreferredProvider', undefined);
@@ -190,12 +219,12 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       name: 'web_search',
       tool: createWebSearchTool(orderedProviders),
       description: WEB_SEARCH_DESCRIPTION,
-      compactDescription: 'Search the web for current information. Returns titles, URLs, and snippets.',
+      compactDescription: 'Search the web (Bing CN / Baidu by default; overseas providers as fallback).',
       concurrencySafe: true,
     });
   }
 
-  if (process.env.X_BEARER_TOKEN) {
+  if (checkApiKeyExists('X_BEARER_TOKEN')) {
     tools.push({
       name: 'x_search',
       tool: xSearchTool,

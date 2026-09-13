@@ -1,12 +1,23 @@
 import { readFile } from 'node:fs/promises';
 import { HEARTBEAT_OK_TOKEN } from './suppression.js';
 import { dexterPath } from '../../utils/paths.js';
+import { isFinancialDatasetsConfigured } from '../../tools/finance/api.js';
 
 const HEARTBEAT_MD_PATH = dexterPath('HEARTBEAT.md');
 
-const DEFAULT_CHECKLIST = `- Major index moves (S&P 500, NASDAQ, Dow) — alert if any move more than 2% in a session
+const DEFAULT_CHECKLIST_US = `- Major index moves (S&P 500, NASDAQ, Dow) — alert if any move more than 2% in a session
 - Major China A-share index moves (上证综指, 沪深300, 创业板指) — alert if any move more than 2% in a session
 - Breaking financial news — major earnings surprises, Fed announcements, significant market events`;
+
+// Without the financialdatasets.ai key the U.S. index check can never succeed,
+// so the default checklist keeps only the key-free China A-share / news lines.
+const DEFAULT_CHECKLIST_CN = `- Major China A-share index moves (上证综指, 沪深300, 创业板指) — alert if any move more than 2% in a session
+- Breaking financial news — major earnings surprises, Fed announcements, significant market events`;
+
+/** Pick the default checklist for the current provider configuration. */
+function getDefaultChecklist(): string {
+  return isFinancialDatasetsConfigured() ? DEFAULT_CHECKLIST_US : DEFAULT_CHECKLIST_CN;
+}
 
 /**
  * Load .dexter/HEARTBEAT.md content.
@@ -54,7 +65,7 @@ export async function buildHeartbeatQuery(): Promise<string | null> {
     }
     checklist = content;
   } else {
-    checklist = DEFAULT_CHECKLIST;
+    checklist = getDefaultChecklist();
   }
 
   return `[HEARTBEAT CHECK]
