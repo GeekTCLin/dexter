@@ -37,7 +37,10 @@ const schema = z.object({
     .enum(['latest', 'hot'])
     .optional()
     .default('latest')
-    .describe('Sort order for sentiment posts (default: latest)'),
+    .describe(
+      'Sort order for sentiment posts (default: latest). Sentiment returns Guba post volume plus ' +
+        '阅读/评论/转发 metrics; the legacy 多空 bullish/bearish flag is unreliable (always 0).',
+    ),
 });
 
 function sourceUrls(url: string | undefined): string[] | undefined {
@@ -116,7 +119,7 @@ China-market only. Uses free public endpoints — no API key required.
 ## Commands
 
 - **flash**: latest China 7x24 market flash news. No arguments beyond \`limit\`.
-- **sentiment**: Eastmoney Guba retail posts and bullish/bearish counts. Requires \`code\` (or \`query\`) as a 6-digit A-share code; \`sort\` = latest | hot.
+- **sentiment**: Eastmoney Guba retail posts with 阅读/评论/转发 (clicks/comments/forwards) metrics and per-post URLs. The legacy 多空 (bullish/bearish) flag is unreliable — it has been observed to always be 0 — so reason from post volume and engagement instead. Requires \`code\` (or \`query\`) as a 6-digit A-share code; \`sort\` = latest | hot.
 - **news**: keyword news search. Requires \`query\` (the keyword). Optional \`limit\`.
 - **announcements**: official CNINFO announcements. Requires \`code\` (or \`query\`) as a 6-digit A-share code.
 

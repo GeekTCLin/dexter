@@ -204,7 +204,7 @@ describe('getFlashNews', () => {
 });
 
 describe('getGubaSentiment', () => {
-  test('parses Guba posts and always sends plat=web&version=300', async () => {
+  test('parses Guba posts, marks the unreliable legacy flag as unknown, and always sends plat=web&version=300', async () => {
     handler = () =>
       jsonResponse({
         count: 42,
@@ -218,7 +218,8 @@ describe('getGubaSentiment', () => {
             post_comment_count: 5,
             post_publish_time: '2026-09-13 10:00:00',
             post_last_time: '2026-09-13 10:05:00',
-            bullish_bearish: 1,
+            // Live-observed value: Guba's bullish_bearish is always 0.
+            bullish_bearish: 0,
           },
         ],
       });
@@ -228,9 +229,12 @@ describe('getGubaSentiment', () => {
     expect(result.source).toBe('eastmoney');
     expect(result.value.code).toBe('600519');
     expect(result.value.total).toBe(42);
-    expect(result.value.bullish).toBe(1);
     expect(result.value.posts[0].url).toBe('https://guba.eastmoney.com/news,600519,554433.html');
-    expect(result.value.posts[0].sentiment).toBe('bullish');
+    expect(result.value.posts[0].sentiment).toBe('unknown');
+    expect(result.value.bullish).toBe(0);
+    expect(result.value.bearish).toBe(0);
+    expect(result.value.posts[0].clicks).toBe(100);
+    expect(result.value.posts[0].comments).toBe(5);
 
     const url = requestedUrls[0];
     expect(url).toContain('plat=web');
@@ -310,6 +314,33 @@ describe('getAnnouncements', () => {
   test('uses orgId returned by CNINFO topSearch when available', async () => {
     handler = (url) => {
       if (url.includes('topSearch')) return jsonResponse({ keyWord: [{ code: '600519', orgId: 'gssh0600519' }] });
+      return jsonResponse({ announcements: [] });
+    };
+
+    await getAnnouncements('600519', { limit: 5 });
+
+    const queryIndex = requestedUrls.findIndex((u) => u.includes('hisAnnouncement/query'));
+    expect(queryIndex).toBeGreaterThan(-1);
+    expect(String(requestedInits[queryIndex]?.body)).toContain('stock=600519,gssh0600519');
+  });
+
+  test('throws (does not silently return empty) when topSearch is down for a non-main-board code', async () => {
+    handler = (url) => {
+      if (url.includes('topSearch')) throw new Error('network down');
+      return jsonResponse({ announcements: [] });
+    };
+
+    await expect(getAnnouncements('300750', { limit: 5 })).rejects.toThrow(
+      /Unable to resolve the CNINFO orgId for 300750/,
+    );
+
+    // Must not fabricate an orgId and hit the query endpoint with it.
+    expect(requestedUrls.some((u) => u.includes('hisAnnouncement/query'))).toBe(false);
+  });
+
+  test('still resolves a main-board code via the heuristic when topSearch is down', async () => {
+    handler = (url) => {
+      if (url.includes('topSearch')) throw new Error('network down');
       return jsonResponse({ announcements: [] });
     };
 

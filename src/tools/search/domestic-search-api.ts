@@ -56,7 +56,14 @@ export interface GubaSentiment {
   code: string;
   sort: 'latest' | 'hot';
   total: number;
+  /**
+   * Legacy/unreliable. Derived from Guba's `bullish_bearish` field, which has
+   * been observed to always be 0 (3,000 sampled posts, 6 codes, 2026-09-13;
+   * types 0 and 1). These counts are effectively always 0 — callers should
+   * reason from post volume plus clicks/comments instead.
+   */
   bullish: number;
+  /** See {@link GubaSentiment.bullish}: effectively always 0 / unreliable. */
   bearish: number;
   neutral: number;
   posts: GubaPost[];
@@ -442,11 +449,15 @@ async function fetchFlashFromSina(limit: number): Promise<Sourced<NewsItem[]>> {
 // ─── Eastmoney Guba sentiment ────────────────────────────────────────────────
 
 function parseSentiment(value: unknown): SentimentLabel {
-  // Assumption (unverified): 1 = 看多, 2 = 看空; anything else = neutral.
+  // Forward-compatible mapping only. Guba's `bullish_bearish` field has been
+  // observed to be 0 across all 3,000 sampled posts (6 codes, types 0 and 1 on
+  // 2026-09-13), and the 1=看多 / 2=看空 mapping is unverified, so anything
+  // else (including the observed 0) maps to 'unknown'. Do NOT treat this as a
+  // real sentiment signal.
   const num = toNumber(value);
   if (num === 1) return 'bullish';
   if (num === 2) return 'bearish';
-  return 'neutral';
+  return 'unknown';
 }
 
 async function fetchGubaSentiment(
@@ -548,11 +559,22 @@ async function fetchNewsFromEastmoney(keyword: string, limit: number): Promise<S
 
 // ─── CNINFO official announcements ───────────────────────────────────────────
 
-function cninfoHeuristicOrgId(code: string): string {
-  // Fallback only (topSearch is the primary path). Real cninfo orgIds are the
-  // venue prefix plus the 6-digit code left-padded to 7 digits: 600519 →
-  // "gssh0600519", 000001 → "gssz0000001".
-  return /^[69]/.test(code) ? `gssh0${code}` : `gssz0${code}`;
+function cninfoHeuristicOrgId(code: string): string | null {
+  // Fallback only (topSearch is the primary path). Only main-board codes are
+  // derivable: SSE main board (60xxxx) -> "gssh0" + code, SZSE main board
+  // (00xxxx) -> "gssz0" + code. Examples: 600519 -> "gssh0600519",
+  // 000001 -> "gssz0000001".
+  //
+  // ChiNext/STAR/BSE orgIds are NOT derivable. Verified live on 2026-09-13:
+  //   300750 real="GD165627"   (544 records) vs heuristic "gssz0300750" (0)
+  //   688111 real="9900035303" (341 records) vs heuristic "gssh0688111" (0)
+  //   830799 real="gfbj0830799" (285 records) vs heuristic "gssz0830799" (0)
+  // Guessing fabricates a wrong orgId; the announcement query then succeeds
+  // with 0 rows, silently returning empty results. Return null instead so the
+  // caller fails loudly and the user can retry.
+  if (/^60\d{4}$/.test(code)) return `gssh0${code}`;
+  if (/^00\d{4}$/.test(code)) return `gssz0${code}`;
+  return null;
 }
 
 function extractOrgId(payload: unknown, code: string): string | null {
@@ -620,6 +642,12 @@ async function fetchAnnouncements(
   const pageSize = clampLimit(limit, 1, 50, 20);
   const resolved = await resolveOrgId(normalized);
   const orgId = resolved ?? cninfoHeuristicOrgId(normalized);
+  if (!orgId) {
+    throw new Error(
+      `Unable to resolve the CNINFO orgId for ${normalized}: the CNINFO lookup service is unavailable. ` +
+        'Retry later. (Only main-board 60xxxx/00xxxx codes can be inferred.)',
+    );
+  }
   const end = new Date();
   const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
   const body = [
