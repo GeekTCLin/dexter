@@ -154,15 +154,27 @@ export function useAgentStream() {
 
     // Handle "done" events (terminal frame: {runId, answer})
     const handleDone = (e: MessageEvent) => {
+      let terminalAnswer = "";
       try {
         const data = JSON.parse(e.data) as DoneFrame;
-        if (data.answer) {
-          useStore.getState().setFinalAnswer(data.answer);
-        }
+        terminalAnswer = data.answer ?? "";
       } catch {
         // ignore
       }
       const s = useStore.getState();
+      // Commit the finished turn into the transcript so it survives the next
+      // send. The live answer slots are cleared here and re-cleared on send.
+      const answer = terminalAnswer || s.finalAnswer;
+      if (answer.trim()) {
+        s.addMessage({
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: answer,
+          timestamp: Date.now(),
+        });
+      }
+      s.setFinalAnswer("");
+      s.setCurrentAnswer("");
       s.setIsStreaming(false);
       s.setActiveRunId(null);
       s.setCurrentThinking("");

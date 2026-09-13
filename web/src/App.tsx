@@ -57,7 +57,10 @@ export default function App() {
   // Load config on mount
   useEffect(() => {
     getConfig()
-      .then(setConfig)
+      .then((config) => {
+        setConfig(config);
+        setConnectionStatus("connected");
+      })
       .catch(() => {
         setConnectionStatus("error");
       });
