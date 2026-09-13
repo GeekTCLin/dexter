@@ -1,6 +1,6 @@
 import { StructuredToolInterface } from '@langchain/core/tools';
 import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks } from './finance/index.js';
-import { exaSearch, perplexitySearch, tavilySearch, langSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION } from './search/index.js';
+import { exaSearch, perplexitySearch, tavilySearch, langSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION, domesticSearchTool, DOMESTIC_SEARCH_DESCRIPTION } from './search/index.js';
 import { createWebSearchTool, type WebSearchProvider } from './search/web-search.js';
 import { getSetting } from '../utils/config.js';
 import type { SearchProviderId } from '../utils/env.js';
@@ -202,6 +202,18 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       description: X_SEARCH_DESCRIPTION,
       compactDescription: 'Search X/Twitter for tweets, profiles, and threads.',
       concurrencySafe: true,
+    });
+  }
+
+  // China domestic news/sentiment needs no key, so it is enabled by default;
+  // DOMESTIC_SEARCH_DISABLED=1 opts out.
+  if (process.env.DOMESTIC_SEARCH_DISABLED !== '1') {
+    tools.push({
+      name: 'domestic_search',
+      tool: domesticSearchTool,
+      description: DOMESTIC_SEARCH_DESCRIPTION,
+      compactDescription: 'China A-share flash news, Guba retail sentiment, keyword news, and official CNINFO announcements (no key).',
+      concurrencySafe: false,
     });
   }
 
