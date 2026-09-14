@@ -11,7 +11,7 @@ export function ChatPage() {
   useAgentStream();
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full">
       {/* Desktop sidebar (always visible on md+) */}
       <ConversationSidebarDesktop />
 

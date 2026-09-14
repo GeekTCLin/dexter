@@ -12,7 +12,7 @@ function Nav() {
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-40 bg-surface-raised/80 backdrop-blur-sm border-b border-surface-border">
+    <nav className="flex-shrink-0 z-40 bg-surface-raised/80 backdrop-blur-sm border-b border-surface-border">
       <div className="max-w-4xl mx-auto px-4 h-11 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {/* Mobile sidebar toggle — only on chat page */}
@@ -94,9 +94,9 @@ export default function App() {
   }, [setConfig, setConnectionStatus]);
 
   return (
-    <div className="min-h-screen bg-surface-bg">
+    <div className="flex h-screen flex-col overflow-hidden bg-surface-bg">
       <Nav />
-      <main className="pt-11">
+      <main className="flex-1 min-h-0 overflow-y-auto">
         <Routes>
           <Route path="/" element={<ChatPage />} />
           <Route path="/settings" element={<SettingsPage />} />
