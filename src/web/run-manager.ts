@@ -166,6 +166,18 @@ export class RunManager {
     return this.runs.has(runId);
   }
 
+  /**
+   * Drop everything cached for a deleted conversation. In-flight runs for it are
+   * aborted so a late assistant reply is not persisted to a conversation that no
+   * longer exists (appendMessage is a no-op once the file is gone).
+   */
+  forgetConversation(conversationId: string): void {
+    this.histories.delete(conversationId);
+    for (const run of this.runs.values()) {
+      if (run.conversationId === conversationId) run.abortController.abort();
+    }
+  }
+
   approve(runId: string, decision: ApprovalDecision): boolean {
     const run = this.runs.get(runId);
     if (!run?.pendingApproval) return false;

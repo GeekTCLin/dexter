@@ -1,11 +1,17 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
 import {
   getConversations,
   getConversation,
   createConversation,
+  deleteConversation as deleteConversationApi,
+  cleanupConversations,
 } from "../api/client";
 import type { ConversationMessage } from "../types";
+
+/** Conversations untouched for this many days are removed by 清理. Mirrors
+ *  src/web/chat-store.ts CONVERSATION_RETENTION_DAYS. */
+const RETENTION_DAYS = 20;
 
 /* ─── Relative time helper ─── */
 
@@ -38,41 +44,107 @@ function SidebarContent({ onSelect }: { onSelect: () => void }) {
   const setPendingQuestion = useStore((s) => s.setPendingQuestion);
   const setPendingApproval = useStore((s) => s.setPendingApproval);
   const loadingRef = useRef(false);
+  const cleaningRef = useRef(false);
+  const deletingRef = useRef(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const refreshConversations = useCallback(
+    () =>
+      getConversations()
+        .then((list) => useStore.getState().setConversations(list))
+        .catch(() => {}),
+    []
+  );
 
   // Load conversation list on mount
   useEffect(() => {
-    getConversations()
-      .then((list) => useStore.getState().setConversations(list))
-      .catch(() => {});
-  }, []);
+    void refreshConversations();
+  }, [refreshConversations]);
 
-  const handleNewConversation = useCallback(() => {
-    setConversationId(null);
-    setMessages([]);
+  const resetStreamingState = useCallback(() => {
+    setIsStreaming(false);
+    setActiveRunId(null);
+    setPendingQuestion(null);
+    setPendingApproval(null);
     clearStreamEvents();
     setCurrentThinking("");
     setCurrentAnswer("");
     setFinalAnswer("");
     clearStreamingAnswer();
-    setIsStreaming(false);
-    setActiveRunId(null);
-    setPendingQuestion(null);
-    setPendingApproval(null);
-    onSelect();
   }, [
-    setConversationId,
-    setMessages,
+    setIsStreaming,
+    setActiveRunId,
+    setPendingQuestion,
+    setPendingApproval,
     clearStreamEvents,
     setCurrentThinking,
     setCurrentAnswer,
     setFinalAnswer,
     clearStreamingAnswer,
-    setIsStreaming,
-    setActiveRunId,
-    setPendingQuestion,
-    setPendingApproval,
-    onSelect,
   ]);
+
+  const handleNewConversation = useCallback(() => {
+    setConversationId(null);
+    setMessages([]);
+    resetStreamingState();
+    onSelect();
+  }, [setConversationId, setMessages, resetStreamingState, onSelect]);
+
+  /** Remove conversations idle past the retention window. */
+  const handleCleanup = useCallback(async () => {
+    if (cleaningRef.current) return;
+    cleaningRef.current = true;
+    setCleaning(true);
+    try {
+      const { deleted } = await cleanupConversations(RETENTION_DAYS);
+      const state = useStore.getState();
+      state.removeConversations(deleted);
+      if (state.conversationId && deleted.includes(state.conversationId)) {
+        setConversationId(null);
+        setMessages([]);
+        resetStreamingState();
+      }
+      await refreshConversations();
+      if (deleted.length === 0) {
+        window.alert(`没有超过 ${RETENTION_DAYS} 天未更新的对话。`);
+      }
+    } catch {
+      window.alert("清理失败。请确认 Dexter 后端是否已启动。");
+    } finally {
+      cleaningRef.current = false;
+      setCleaning(false);
+    }
+  }, [
+    refreshConversations,
+    resetStreamingState,
+    setConversationId,
+    setMessages,
+  ]);
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (deletingRef.current) return;
+      deletingRef.current = true;
+      setDeletingId(id);
+      try {
+        await deleteConversationApi(id);
+        const state = useStore.getState();
+        state.removeConversations([id]);
+        if (state.conversationId === id) {
+          setConversationId(null);
+          setMessages([]);
+          resetStreamingState();
+        }
+      } catch {
+        window.alert("删除失败。");
+      } finally {
+        deletingRef.current = false;
+        setDeletingId(null);
+      }
+    },
+    [resetStreamingState, setConversationId, setMessages]
+  );
 
   const handleSelectConversation = useCallback(
     async (id: string) => {
@@ -80,15 +152,7 @@ function SidebarContent({ onSelect }: { onSelect: () => void }) {
       loadingRef.current = true;
 
       // Reset streaming state before loading
-      setIsStreaming(false);
-      setActiveRunId(null);
-      setPendingQuestion(null);
-      setPendingApproval(null);
-      clearStreamEvents();
-      setCurrentThinking("");
-      setCurrentAnswer("");
-      setFinalAnswer("");
-      clearStreamingAnswer();
+      resetStreamingState();
 
       try {
         const convo = await getConversation(id);
@@ -109,21 +173,7 @@ function SidebarContent({ onSelect }: { onSelect: () => void }) {
         onSelect();
       }
     },
-    [
-      activeId,
-      setConversationId,
-      setMessages,
-      clearStreamEvents,
-      setCurrentThinking,
-      setCurrentAnswer,
-      setFinalAnswer,
-      clearStreamingAnswer,
-      setIsStreaming,
-      setActiveRunId,
-      setPendingQuestion,
-      setPendingApproval,
-      onSelect,
-    ]
+    [activeId, setConversationId, setMessages, resetStreamingState, onSelect]
   );
 
   return (
@@ -133,19 +183,29 @@ function SidebarContent({ onSelect }: { onSelect: () => void }) {
         <span className="text-xs font-semibold text-ink-secondary uppercase tracking-wider">
           对话列表
         </span>
-        <button
-          onClick={() => {
-            createConversation()
-              .then((c) => {
-                useStore.getState().addConversation(c);
-                handleNewConversation();
-              })
-              .catch(() => handleNewConversation());
-          }}
-          className="px-2.5 py-1 text-[11px] font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition-colors"
-        >
-          + 新对话
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleCleanup}
+            disabled={cleaning}
+            title={`删除超过 ${RETENTION_DAYS} 天未更新的对话`}
+            className="px-2 py-1 text-[11px] font-medium text-ink-secondary border border-surface-border rounded-md hover:text-ink hover:bg-surface-sunken transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {cleaning ? "清理中…" : "清理"}
+          </button>
+          <button
+            onClick={() => {
+              createConversation()
+                .then((c) => {
+                  useStore.getState().addConversation(c);
+                  handleNewConversation();
+                })
+                .catch(() => handleNewConversation());
+            }}
+            className="px-2.5 py-1 text-[11px] font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition-colors"
+          >
+            + 新对话
+          </button>
+        </div>
       </div>
 
       {/* Conversation list */}
@@ -159,24 +219,36 @@ function SidebarContent({ onSelect }: { onSelect: () => void }) {
             {conversations.map((c) => {
               const isActive = c.id === activeId;
               return (
-                <button
-                  key={c.id}
-                  onClick={() => handleSelectConversation(c.id)}
-                  className={`w-full text-left px-4 py-2.5 transition-colors ${
-                    isActive
-                      ? "bg-accent/8 border-l-2 border-accent"
-                      : "border-l-2 border-transparent hover:bg-surface-sunken"
-                  }`}
-                >
-                  <div className="text-xs font-medium text-ink-secondary truncate">
-                    {c.title || "新对话"}
-                  </div>
-                  {c.updatedAt != null && (
-                    <div className="text-[10px] text-ink-tertiary mt-0.5">
-                      {relativeTime(c.updatedAt)}
+                <div key={c.id} className="group relative">
+                  <button
+                    onClick={() => handleSelectConversation(c.id)}
+                    className={`w-full text-left pl-4 pr-9 py-2.5 transition-colors ${
+                      isActive
+                        ? "bg-accent/8 border-l-2 border-accent"
+                        : "border-l-2 border-transparent hover:bg-surface-sunken"
+                    }`}
+                  >
+                    <div className="text-xs font-medium text-ink-secondary truncate">
+                      {c.title || "新对话"}
                     </div>
-                  )}
-                </button>
+                    {c.updatedAt != null && (
+                      <div className="text-[10px] text-ink-tertiary mt-0.5">
+                        {relativeTime(c.updatedAt)}
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    disabled={deletingId === c.id}
+                    aria-label="删除对话"
+                    title="删除对话"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded text-ink-tertiary opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-50 transition-all disabled:opacity-50"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
               );
             })}
           </div>

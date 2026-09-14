@@ -93,6 +93,7 @@ interface DexterState {
   conversations: ConversationSummary[];
   setConversations: (list: ConversationSummary[]) => void;
   addConversation: (c: ConversationSummary) => void;
+  removeConversations: (ids: string[]) => void;
   updateConversationInList: (id: string, patch: Partial<ConversationSummary>) => void;
 
   /* ─── Sidebar ─── */
@@ -178,6 +179,10 @@ export const useStore = create<DexterState>((set) => ({
   setConversations: (conversations) => set({ conversations }),
   addConversation: (c) =>
     set((s) => ({ conversations: [c, ...s.conversations.filter((x) => x.id !== c.id)] })),
+  removeConversations: (ids) =>
+    set((s) => ({
+      conversations: s.conversations.filter((c) => !ids.includes(c.id)),
+    })),
   updateConversationInList: (id, patch) =>
     set((s) => ({
       conversations: s.conversations.map((c) =>

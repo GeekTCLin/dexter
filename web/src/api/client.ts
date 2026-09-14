@@ -145,6 +145,19 @@ export async function createConversation(
   });
 }
 
+export async function deleteConversation(id: string): Promise<{ ok: boolean }> {
+  return request(`/api/conversations/${id}`, { method: "DELETE" });
+}
+
+export async function cleanupConversations(
+  days?: number
+): Promise<{ deleted: string[]; kept: number }> {
+  return request("/api/conversations/cleanup", {
+    method: "POST",
+    body: JSON.stringify({ days }),
+  });
+}
+
 export function buildSSEUrl(runId: string, from?: number): string {
   const token = getToken();
   const params = new URLSearchParams();

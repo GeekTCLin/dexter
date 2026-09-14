@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RunManager } from './run-manager.js';
 import { handleConfigRoute } from './config-routes.js';
-import { getConversation, listConversations, createConversation } from './chat-store.js';
+import { getConversation, listConversations, createConversation, deleteConversation, cleanupConversations, CONVERSATION_RETENTION_DAYS } from './chat-store.js';
 import type { ApprovalDecision } from '../agent/types.js';
 import type { AnswerBody, ApproveBody, ChatRequestBody, SseFrame } from './types.js';
 
@@ -33,6 +33,11 @@ export function startWebServer(options: WebServerOptions): WebServer {
   const distDir = resolve(options.distDir ?? DEFAULT_DIST_DIR);
   const runManager = new RunManager();
 
+  // Sweep stale conversations on boot, then once a day for long-running servers.
+  void sweepConversations(runManager);
+  const cleanupTimer = setInterval(() => void sweepConversations(runManager), DAY_MS);
+  (cleanupTimer as { unref?: () => void }).unref?.();
+
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: options.port,
@@ -44,9 +49,29 @@ export function startWebServer(options: WebServerOptions): WebServer {
 
   return {
     port: server.port ?? options.port,
-    stop: () => server.stop(true),
+    stop: () => {
+      clearInterval(cleanupTimer);
+      server.stop(true);
+    },
     runManager,
   };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Delete conversations past the retention window and drop their cached state. */
+async function sweepConversations(runManager: RunManager): Promise<void> {
+  try {
+    const { deleted } = await cleanupConversations();
+    for (const id of deleted) runManager.forgetConversation(id);
+    if (deleted.length > 0) {
+      console.log(
+        `[web] cleaned up ${deleted.length} conversation(s) older than ${CONVERSATION_RETENTION_DAYS} days`,
+      );
+    }
+  } catch (error) {
+    console.error('[web] conversation cleanup failed:', error);
+  }
 }
 
 async function handleRequest(
@@ -113,10 +138,27 @@ async function handleApi(
     );
   }
 
+  // Must precede the generic /api/conversations/:id match below.
+  if (method === 'POST' && pathname === '/api/conversations/cleanup') {
+    const payload = body as { days?: unknown } | null;
+    const days =
+      typeof payload?.days === 'number' && payload.days > 0 ? payload.days : undefined;
+    const result = await cleanupConversations(days);
+    for (const id of result.deleted) runManager.forgetConversation(id);
+    return json(result);
+  }
+
   const conversationMatch = /^\/api\/conversations\/([^/]+)$/.exec(pathname);
   if (method === 'GET' && conversationMatch) {
     const conversation = await getConversation(decodeURIComponent(conversationMatch[1]));
     return conversation ? json(conversation) : json({ error: 'Not found' }, 404);
+  }
+
+  if (method === 'DELETE' && conversationMatch) {
+    const id = decodeURIComponent(conversationMatch[1]);
+    const removed = await deleteConversation(id);
+    if (removed) runManager.forgetConversation(id);
+    return removed ? json({ ok: true }) : json({ error: 'Not found' }, 404);
   }
 
   const eventsMatch = /^\/api\/runs\/([^/]+)\/events$/.exec(pathname);

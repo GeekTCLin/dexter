@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   appendMessage,
+  cleanupConversations,
+  CONVERSATION_RETENTION_DAYS,
   createConversation,
+  deleteConversation,
   deriveTitle,
   getConversation,
   listConversations,
@@ -91,5 +94,35 @@ describe('conversations', () => {
     const indexSecond = list.findIndex((entry) => entry.id === second.id);
     const indexFirst = list.findIndex((entry) => entry.id === first.id);
     expect(indexSecond).toBeLessThan(indexFirst);
+  });
+});
+
+describe('cleanup', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  test('keeps conversations inside the retention window', async () => {
+    const conversation = await createConversation();
+    await appendMessage(conversation.id, { role: 'user', content: 'recent' });
+
+    const result = await cleanupConversations(CONVERSATION_RETENTION_DAYS);
+    expect(result.deleted).not.toContain(conversation.id);
+    expect(await getConversation(conversation.id)).not.toBeNull();
+  });
+
+  test('deletes conversations past the retention window', async () => {
+    const conversation = await createConversation();
+    await appendMessage(conversation.id, { role: 'user', content: 'stale' });
+
+    const future = Date.now() + (CONVERSATION_RETENTION_DAYS + 1) * DAY_MS;
+    const result = await cleanupConversations(CONVERSATION_RETENTION_DAYS, future);
+    expect(result.deleted).toContain(conversation.id);
+    expect(await getConversation(conversation.id)).toBeNull();
+  });
+
+  test('deleteConversation removes a single conversation', async () => {
+    const conversation = await createConversation();
+    expect(await deleteConversation(conversation.id)).toBe(true);
+    expect(await getConversation(conversation.id)).toBeNull();
+    expect(await deleteConversation(conversation.id)).toBe(false);
   });
 });

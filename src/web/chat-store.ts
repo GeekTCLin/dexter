@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { dexterPath } from '../utils/paths.js';
 import { LongTermChatHistory } from '../utils/long-term-chat-history.js';
@@ -33,6 +33,17 @@ const CONVERSATIONS_DIR = dexterPath('conversations');
 const DEFAULT_TITLE = '新对话';
 const MAX_TITLE_CHARS = 30;
 const PLACEHOLDER_TITLES = new Set([DEFAULT_TITLE, 'New conversation']);
+
+/** Conversations untouched for longer than this are swept by cleanup. */
+export const CONVERSATION_RETENTION_DAYS = 20;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface CleanupResult {
+  /** Ids of the conversations that were removed. */
+  deleted: string[];
+  /** Number of conversations left in place. */
+  kept: number;
+}
 
 let flatHistory: LongTermChatHistory | null = null;
 
@@ -120,6 +131,36 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     });
   }
   return summaries.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Delete a conversation's JSON file. Returns true when a file was removed. */
+export async function deleteConversation(id: string): Promise<boolean> {
+  try {
+    await unlink(conversationPath(id));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete conversations not updated within the retention window. The flat
+ * chat_history.json and memory store are intentionally left untouched: deleting
+ * a conversation only forgets this archived thread, not what Dexter has learned.
+ */
+export async function cleanupConversations(
+  maxAgeDays: number = CONVERSATION_RETENTION_DAYS,
+  now: number = Date.now(),
+): Promise<CleanupResult> {
+  const cutoff = now - maxAgeDays * DAY_MS;
+  const summaries = await listConversations();
+  const deleted: string[] = [];
+  for (const summary of summaries) {
+    if (summary.updatedAt < cutoff && (await deleteConversation(summary.id))) {
+      deleted.push(summary.id);
+    }
+  }
+  return { deleted, kept: summaries.length - deleted.length };
 }
 
 /**
