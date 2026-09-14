@@ -504,6 +504,271 @@ export function formatIndexBars(data: unknown, _args?: Rec): string {
   return lines.join('\n');
 }
 
+export function formatIndexValuation(data: unknown, args?: Rec): string {
+  // The tool returns either the valuation object directly, or a
+  // `{ symbol, valuation: null, note }` envelope when the index is uncovered.
+  const rec = (data && typeof data === 'object') ? data as Rec : {};
+  const nested = rec.valuation;
+  const valuation = (nested && typeof nested === 'object') ? nested as Rec : null;
+  if (!valuation) {
+    const symbol = rec.symbol ?? args?.symbol ?? '—';
+    return `未获取到 ${symbol} 的估值数据（该指数可能不在覆盖范围内）。`;
+  }
+  const lines = [
+    `指数: ${valuation.name ?? args?.symbol ?? '—'} (${valuation.symbol ?? '—'})`,
+    `PE(TTM): ${fmtRatio(valuation.pe)}`,
+    `PB: ${fmtRatio(valuation.pb)}`,
+    `股息率: ${fmtPct(valuation.dividendYield)}`,
+    `ROE: ${fmtPct(valuation.roe)}`,
+    `PEG: ${fmtRatio(valuation.peg)}`,
+    `PE 历史分位: ${fmtPct(valuation.pePercentile)}`,
+    `PB 历史分位: ${fmtPct(valuation.pbPercentile)}`,
+    `10年期国债收益率: ${fmtPct(valuation.bondYield)}`,
+  ];
+  if (valuation.evaluation) lines.push(`估值状态: ${valuation.evaluation}`);
+  if (valuation.valuationDate) lines.push(`估值日期: ${valuation.valuationDate}`);
+  if (valuation.historyYears) lines.push(`历史区间: 约 ${valuation.historyYears} 年`);
+  lines.push(`数据源: ${valuation.source ?? '—'}`);
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Domestic fund (A-share) formatters
+// ---------------------------------------------------------------------------
+
+// Fund NAV carries 4 decimal places, unlike index points (2).
+function fmtNav(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (isNaN(num)) return '—';
+  return num.toFixed(4);
+}
+
+const MAX_FUND_NAV_ROWS = 60;
+
+export function formatFundQuotes(data: unknown, _args?: Rec): string {
+  const items = pickIndexArray(data, 'quotes');
+  if (items.length === 0) return 'No fund quotes available.';
+  const lines = ['Fund Quotes', ''];
+  lines.push('| 代码 | 名称 | 单位净值 | 累计净值 | 净值日涨跌 | 场内价格 | 价格涨跌 | 折溢价率 | 净值日期 |');
+  lines.push('|------|------|----------|----------|------------|----------|----------|----------|----------|');
+  for (const item of items as Rec[]) {
+    lines.push(
+      `| ${item.code ?? '—'} | ${item.name ?? '—'} | ${fmtNav(item.nav)} | ${fmtNav(item.accNav)} | ${fmtIndexPct(item.navChangePercent)} | ${fmtNav(item.price)} | ${fmtIndexPct(item.priceChangePercent)} | ${fmtIndexPct(item.premiumPercent)} | ${item.navDate ?? '—'} |`,
+    );
+  }
+  return lines.join('\n');
+}
+
+export function formatFundNav(data: unknown, _args?: Rec): string {
+  const rows = pickIndexArray(data, 'points');
+  if (rows.length === 0) return 'No fund NAV history available.';
+  // Eastmoney returns newest-first; sort ascending so the recent window is the tail.
+  const sorted = [...(rows as Rec[])].sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)),
+  );
+  const shown = sorted.slice(-MAX_FUND_NAV_ROWS);
+  const lines = ['Fund NAV History', ''];
+  lines.push('| 日期 | 单位净值 | 累计净值 | 日涨跌 |');
+  lines.push('|------|----------|----------|--------|');
+  for (const row of shown) {
+    lines.push(
+      `| ${row.date ?? '—'} | ${fmtNav(row.nav)} | ${fmtNav(row.accNav)} | ${fmtIndexPct(row.changePercent)} |`,
+    );
+  }
+  if (sorted.length > MAX_FUND_NAV_ROWS) {
+    lines.push('', `(showing most recent ${MAX_FUND_NAV_ROWS} of ${sorted.length} rows)`);
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Domestic market (A-share) formatters: breadth, margin
+// ---------------------------------------------------------------------------
+
+export function formatMarketBreadth(data: unknown, _args?: Rec): string {
+  const d = (data && typeof data === 'object' ? data : {}) as Rec;
+  if (d.up === undefined && d.down === undefined) return 'No market breadth available.';
+  const lines = [
+    `交易日: ${d.tradeDate ?? '—'}`,
+    `上涨: ${fmtNum(d.up)}`,
+    `下跌: ${fmtNum(d.down)}`,
+    `平盘: ${fmtNum(d.flat)}`,
+    `合计: ${fmtNum(d.total)}`,
+    `涨停: ${d.limitUp === null || d.limitUp === undefined ? '—' : fmtNum(d.limitUp)}`,
+    `跌停: ${d.limitDown === null || d.limitDown === undefined ? '—' : fmtNum(d.limitDown)}`,
+    `沪市成交额: ${fmtNum(d.shAmount)}`,
+    `深市成交额: ${fmtNum(d.szAmount)}`,
+    `两市成交额: ${fmtNum(d.turnover)}`,
+    `数据源: ${d.source ?? '—'}`,
+  ];
+  return lines.join('\n');
+}
+
+export function formatMarginData(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const rows = Array.isArray(rec.rows) ? (rec.rows as Rec[]) : [];
+  if (rows.length === 0) return 'No margin data available.';
+  const lines = ['Margin Financing (两融)', ''];
+  lines.push('| 日期 | 融资余额 | 融资净买入 | 融券余额 | 两融余额 | 占流通市值 |');
+  lines.push('|------|----------|------------|----------|----------|------------|');
+  for (const row of rows) {
+    lines.push(
+      `| ${row.date ?? '—'} | ${fmtNum(row.financingBalance)} | ${fmtNum(row.financingNet)} | ${fmtNum(row.securitiesLendingBalance)} | ${fmtNum(row.marginBalance)} | ${fmtPct(row.financingBalanceRatio)} |`,
+    );
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Domestic fund holdings + index→ETF map formatters
+// ---------------------------------------------------------------------------
+
+export function formatFundHoldings(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const stocks = Array.isArray(rec.stocks) ? (rec.stocks as Rec[]) : [];
+  const header = `Fund Holdings ${rec.code ?? ''}${rec.reportDate ? ` (报告期 ${rec.reportDate})` : ''}`.trim();
+  if (stocks.length === 0) return `${header}\nNo disclosed holdings available.`;
+  const lines = [header, ''];
+  lines.push('| 代码 | 名称 | 占净值比 | 变动 | 变动幅度 | 行业 |');
+  lines.push('|------|------|----------|------|----------|------|');
+  for (const row of stocks) {
+    lines.push(
+      `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtPct(row.weightPercent === null || row.weightPercent === undefined ? null : Number(row.weightPercent) / 100)} | ${row.changeType ?? '—'} | ${fmtIndexPct(row.changePercent)} | ${row.industry ?? '—'} |`,
+    );
+  }
+  if (rec.bondCount || rec.fundOfFundCount) {
+    const parts: string[] = [];
+    if (rec.bondCount) parts.push(`债券持仓 ${rec.bondCount}`);
+    if (rec.fundOfFundCount) parts.push(`基金持仓 ${rec.fundOfFundCount}`);
+    lines.push('', `其他: ${parts.join('，')}`);
+  }
+  return lines.join('\n');
+}
+
+export function formatIndexEtfMap(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const etfs = Array.isArray(rec.etfs) ? (rec.etfs as Rec[]) : [];
+  const header = rec.indexName
+    ? `Index ${rec.indexName} (${rec.indexSymbol ?? '—'}) → ETF`
+    : `Index "${rec.query ?? ''}" → ETF`;
+  if (etfs.length === 0) return `${header}\nNo tracking ETF found.`;
+  const lines = [header, ''];
+  lines.push('| 代码 | 名称 | 公司 | 类型 | 最新净值 | 净值日期 |');
+  lines.push('|------|------|------|------|----------|----------|');
+  for (const row of etfs) {
+    lines.push(
+      `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${row.company ?? '—'} | ${row.fundType ?? '—'} | ${fmtNav(row.nav)} | ${row.navDate ?? '—'} |`,
+    );
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Index constituents / industry boards / fund rankings & profile formatters
+// ---------------------------------------------------------------------------
+
+export function formatIndexConstituents(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const rows = Array.isArray(rec.constituents) ? (rec.constituents as Rec[]) : [];
+  const header = `Index Constituents ${rec.indexName ?? ''} (${rec.symbol ?? '—'})${rec.count ? ` — ${rec.count} 只` : ''}`.trim();
+  if (rows.length === 0) return `${header}\nNo constituent data available.`;
+  const lines = [header];
+  const withWeights = rec.weightsIncluded === true;
+  if (withWeights && rec.weightDate) lines.push('', `权重日期: ${rec.weightDate}`);
+  else if (rec.weightsIncluded === false) lines.push('', '注: 该数据源不提供成分股权重。');
+  if (withWeights) {
+    lines.push('', '| 代码 | 名称 | 权重 | 最新价 | 涨跌幅 |');
+    lines.push('|------|------|------|--------|--------|');
+    for (const row of rows) {
+      const weight =
+        row.weight === null || row.weight === undefined ? null : Number(row.weight) / 100;
+      lines.push(
+        `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtPct(weight)} | ${fmtIndexPoints(row.price)} | ${fmtIndexPct(row.changePercent)} |`,
+      );
+    }
+  } else {
+    lines.push('', '| 代码 | 名称 | 最新价 | 涨跌幅 |');
+    lines.push('|------|------|--------|--------|');
+    for (const row of rows) {
+      lines.push(
+        `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtIndexPoints(row.price)} | ${fmtIndexPct(row.changePercent)} |`,
+      );
+    }
+  }
+  return lines.join('\n');
+}
+
+export function formatIndustryBoards(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  if (rec.kind === 'members') {
+    const members = Array.isArray(rec.members) ? (rec.members as Rec[]) : [];
+    const header = `Industry Board ${rec.boardName ?? ''} (${rec.board ?? ''})${rec.total ? ` — ${rec.total} 只` : ''}`.trim();
+    if (members.length === 0) return `${header}\nNo member stocks available.`;
+    const lines = [header, '', '| 代码 | 名称 | 最新价 | 涨跌幅 |', '|------|------|--------|--------|'];
+    for (const row of members) {
+      lines.push(
+        `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtIndexPoints(row.price)} | ${fmtIndexPct(row.changePercent)} |`,
+      );
+    }
+    return lines.join('\n');
+  }
+  const boards = Array.isArray(rec.boards) ? (rec.boards as Rec[]) : [];
+  if (boards.length === 0) return 'No industry board data available.';
+  const lines = ['Industry Boards (行业板块)', '', '| 代码 | 名称 | 涨跌幅 | 上涨 | 下跌 | 领涨股 |', '|------|------|--------|------|------|--------|'];
+  for (const row of boards) {
+    lines.push(
+      `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtIndexPct(row.changePercent)} | ${fmtNum(row.up)} | ${fmtNum(row.down)} | ${row.leader ?? row.leaderCode ?? '—'} |`,
+    );
+  }
+  return lines.join('\n');
+}
+
+const SORT_LABELS: Record<string, string> = {
+  rzdf: '日增长率',
+  zzf: '近1周',
+  '1yzf': '近1月',
+  '3yzf': '近3月',
+  '6yzf': '近6月',
+  '1nzf': '近1年',
+  '2nzf': '近2年',
+  '3nzf': '近3年',
+  jnzf: '今年来',
+  lnzf: '成立来',
+};
+
+export function formatFundRankings(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const rows = Array.isArray(rec.rows) ? (rec.rows as Rec[]) : [];
+  const label = SORT_LABELS[String(rec.sort)] ?? String(rec.sort ?? '');
+  const header = `Fund Rankings — 按${label}排序${rec.total ? ` (共 ${rec.total} 只)` : ''}`;
+  if (rows.length === 0) return `${header}\nNo fund ranking data available.`;
+  const lines = [header, '', '| 代码 | 名称 | 单位净值 | 日涨跌 | 近1月 | 近3月 | 近1年 | 近3年 | 成立来 | 净值日期 |', '|------|------|----------|--------|-------|-------|-------|-------|--------|----------|'];
+  for (const row of rows) {
+    lines.push(
+      `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtNav(row.nav)} | ${fmtIndexPct(row.dayGrowth)} | ${fmtIndexPct(row.month1)} | ${fmtIndexPct(row.month3)} | ${fmtIndexPct(row.year1)} | ${fmtIndexPct(row.year3)} | ${fmtIndexPct(row.sinceInception)} | ${row.navDate ?? '—'} |`,
+    );
+  }
+  return lines.join('\n');
+}
+
+export function formatFundProfile(data: unknown, args?: Rec): string {
+  const code = args?.code ?? '';
+  if (data === null || data === undefined) return `Fund ${code} not found.`;
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const lines = [
+    `Fund Profile ${rec.code ?? code}`,
+    `名称: ${rec.name ?? '—'}`,
+    `基金公司: ${rec.company ?? '—'}`,
+    `基金经理: ${rec.manager ?? '—'}`,
+    `类型: ${rec.fundType ?? '—'}`,
+    `最新净值: ${fmtNav(rec.nav)}`,
+    `净值日期: ${rec.navDate ?? '—'}`,
+    `数据源: ${rec.source ?? '—'}`,
+  ];
+  return lines.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // Formatter registry — maps sub-tool names to formatters
 // ---------------------------------------------------------------------------
@@ -533,4 +798,5 @@ export const MARKET_DATA_FORMATTERS: Record<string, (data: unknown, args?: Rec) 
   get_index_snapshot: formatIndexSnapshot,
   get_index_snapshots: formatIndexSnapshots,
   get_index_prices: formatIndexBars,
+  get_index_valuation: formatIndexValuation,
 };

@@ -59,6 +59,17 @@ export const INDEX_CATALOG: IndexDefinition[] = [
   { symbol: '000852.SH', name: '中证1000', emSecid: '1.000852', txCode: 'sh000852' },
   { symbol: '000016.SH', name: '上证50', emSecid: '1.000016', txCode: 'sh000016' },
   { symbol: '000010.SH', name: '上证180', emSecid: '1.000010', txCode: 'sh000010' },
+  // Broad-market / style / red-dividend indices added for wider coverage.
+  { symbol: '000903.SH', name: '中证A100', emSecid: '1.000903', txCode: 'sh000903' },
+  { symbol: '000906.SH', name: '中证800', emSecid: '1.000906', txCode: 'sh000906' },
+  { symbol: '000985.SH', name: '中证全指', emSecid: '1.000985', txCode: 'sh000985' },
+  { symbol: '000510.SH', name: '中证A500', emSecid: '1.000510', txCode: 'sh000510' },
+  { symbol: '000698.SH', name: '科创100', emSecid: '1.000698', txCode: 'sh000698' },
+  { symbol: '000922.SH', name: '中证红利', emSecid: '1.000922', txCode: 'sh000922' },
+  { symbol: '000015.SH', name: '上证红利', emSecid: '1.000015', txCode: 'sh000015' },
+  { symbol: '399330.SZ', name: '深证100', emSecid: '0.399330', txCode: 'sz399330' },
+  { symbol: '399303.SZ', name: '国证2000', emSecid: '0.399303', txCode: 'sz399303' },
+  { symbol: '899050.BJ', name: '北证50', emSecid: '0.899050', txCode: 'bj899050' },
 ];
 
 const INDEX_ALIASES: Record<string, string> = {
@@ -154,7 +165,7 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
-function decodeGbk(buffer: ArrayBuffer): string {
+export function decodeGbk(buffer: ArrayBuffer): string {
   try {
     return new TextDecoder('gbk').decode(buffer);
   } catch {
@@ -190,6 +201,26 @@ export function describeIndexCatalog(): string {
   return INDEX_CATALOG.map((d) => `${d.symbol} ${d.name}`).join(', ');
 }
 
+// Beijing Stock Exchange codes live in Eastmoney market 0 alongside Shenzhen;
+// they are distinguished by the 4xxxxx / 8xxxxx code ranges.
+function marketSuffix(market: string, code: string): 'SH' | 'SZ' | 'BJ' {
+  if (market === '1') return 'SH';
+  return code.startsWith('4') || code.startsWith('8') ? 'BJ' : 'SZ';
+}
+
+// Synthesize an index definition for a code that is not in the static catalog,
+// so callers can reach indices/ETFs we have not enumerated (e.g. 1.930716 or
+// 000985.SH). Only shape-valid codes reach here; free-form words never do.
+function buildDynamicIndex(market: string, code: string): IndexDefinition {
+  const suffix = marketSuffix(market, code);
+  return {
+    symbol: `${code}.${suffix}`,
+    name: code,
+    emSecid: `${market}.${code}`,
+    txCode: `${suffix.toLowerCase()}${code}`,
+  };
+}
+
 export function resolveIndex(query: string): IndexDefinition | undefined {
   const raw = query.trim();
   if (!raw) return undefined;
@@ -218,6 +249,30 @@ export function resolveIndex(query: string): IndexDefinition | undefined {
       const match = INDEX_CATALOG.find((d) => d.emSecid === `${market}.${lower}`);
       if (match) return match;
     }
+    // Not in the catalog — fall back to the market implied by the code prefix.
+    const market = lower.startsWith('399') ? '0' : '1';
+    return buildDynamicIndex(market, lower);
+  }
+
+  // Explicit Eastmoney secid code, e.g. '1.000906' / '0.399303'.
+  const secid = lower.match(/^(\d)\.(\d{6})$/);
+  if (secid) return buildDynamicIndex(secid[1], secid[2]);
+
+  // Full symbol, e.g. '000906.SH' / '899050.BJ'.
+  const symbol = lower.match(/^(\d{6})\.(sh|sz|bj)$/);
+  if (symbol) {
+    const suffixMarket = symbol[2] === 'sh' ? '1' : '0';
+    const def = buildDynamicIndex(suffixMarket, symbol[1]);
+    // Preserve the caller's exchange suffix rather than the code-range guess.
+    return { ...def, symbol: `${symbol[1]}.${symbol[2].toUpperCase()}` };
+  }
+
+  // Tencent code, e.g. 'sh000906' / 'bj899050'.
+  const tx = lower.match(/^(sh|sz|bj)(\d{6})$/);
+  if (tx) {
+    const txMarket = tx[1] === 'sh' ? '1' : '0';
+    const def = buildDynamicIndex(txMarket, tx[2]);
+    return { ...def, txCode: `${tx[1]}${tx[2]}` };
   }
 
   return undefined;

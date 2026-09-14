@@ -54,6 +54,20 @@ describe('resolveIndex', () => {
     expect(resolveIndex('000300')?.symbol).toBe('000300.SH');
   });
 
+  test('resolves the widened catalog and synthesizes unknown codes', () => {
+    expect(resolveIndex('000906')?.symbol).toBe('000906.SH');
+    expect(resolveIndex('000906')?.name).toBe('中证800');
+    expect(resolveIndex('899050')?.symbol).toBe('899050.BJ');
+    expect(resolveIndex('399303')?.name).toBe('国证2000');
+    // Unknown but shape-valid codes are synthesized so arbitrary indices/ETFs
+    // remain reachable without being enumerated in the catalog.
+    expect(resolveIndex('1.000998')?.symbol).toBe('000998.SH');
+    expect(resolveIndex('000998.SZ')?.symbol).toBe('000998.SZ');
+    expect(resolveIndex('sz399999')?.symbol).toBe('399999.SZ');
+    expect(resolveIndex('bj830799')?.symbol).toBe('830799.BJ');
+    expect(resolveIndex('bj830799')?.txCode).toBe('bj830799');
+  });
+
   test('returns undefined for unknown input', () => {
     expect(resolveIndex('NOT_AN_INDEX')).toBeUndefined();
     expect(resolveIndex('')).toBeUndefined();

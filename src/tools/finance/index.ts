@@ -3,8 +3,13 @@ export { getFilings, get10KFilingItems, get10QFilingItems, get8KFilingItems } fr
 export { getKeyRatios, getHistoricalKeyRatios } from './key-ratios.js';
 export { getFinancialSegments } from './segments.js';
 export { getStockPrice, getStockPrices, getStockTickers, STOCK_PRICE_DESCRIPTION } from './stock-price.js';
-export { getIndexSnapshot, getIndexSnapshots, getIndexPrices } from './domestic-index.js';
+export { getIndexSnapshot, getIndexSnapshots, getIndexPrices, getIndexValuation } from './domestic-index.js';
+export { getIndexEtfMap, INDEX_ETF_MAP_DESCRIPTION } from './index-etf-map.js';
+export { getIndexConstituents, INDEX_CONSTITUENTS_DESCRIPTION } from './index-constituents.js';
+export { getMarketBreadth, getMarginData, MARKET_BREADTH_DESCRIPTION, MARGIN_DATA_DESCRIPTION } from './domestic-market.js';
+export { getIndustryBoards, INDUSTRY_BOARDS_DESCRIPTION } from './industry.js';
 export { getCryptoPriceSnapshot, getCryptoPrices, getCryptoTickers } from './crypto.js';
+export { getFundQuotes, getFundNav, getFundHoldings, getFundRankings, getFundProfile, FUND_QUOTES_DESCRIPTION, FUND_NAV_DESCRIPTION, FUND_HOLDINGS_DESCRIPTION, FUND_RANKINGS_DESCRIPTION, FUND_PROFILE_DESCRIPTION } from './domestic-fund.js';
 export { createGetInsiderTrades, getInsiderNames } from './insider_trades.js';
 export { getInsiderOwnership } from './insider_ownership.js';
 export { getInstitutionalHoldings, getInstitutionalInvestors } from './institutional_holdings.js';

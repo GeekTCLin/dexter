@@ -35,6 +35,7 @@ Intelligent meta-tool for retrieving market data including prices, news, and ins
 - China A-share domestic index snapshots (上证综指, 深证成指, 创业板指, 沪深300, 中证500, 科创50, 中证1000, 上证50, 上证180)
 - Major China A-share index overviews ("今天大盘怎么样")
 - Historical China A-share domestic index prices (daily/weekly/monthly K-line)
+- China A-share index valuation (PE/PB/股息率 and their historical percentiles; 估值、高估/低估、分位)
 
 ## When NOT to Use
 
@@ -66,6 +67,7 @@ Intelligent meta-tool for retrieving China A-share domestic market index data. T
 - China A-share domestic index snapshots (上证综指, 深证成指, 创业板指, 沪深300, 中证500, 科创50, 中证1000, 上证50, 上证180)
 - Major China A-share index overviews ("今天大盘怎么样")
 - Historical China A-share domestic index prices (daily/weekly/monthly K-line)
+- China A-share index valuation (PE/PB/股息率 and their historical percentiles; 估值、分位)
 
 ## When NOT to Use
 
@@ -102,13 +104,13 @@ import { createGetInsiderTrades, getInsiderNames } from './insider_trades.js';
 import { getInsiderOwnership } from './insider_ownership.js';
 import { getInstitutionalHoldings } from './institutional_holdings.js';
 import { getBeneficialOwnership } from './beneficial_ownership.js';
-import { getIndexSnapshot, getIndexSnapshots, getIndexPrices } from './domestic-index.js';
+import { getIndexSnapshot, getIndexSnapshots, getIndexPrices, getIndexValuation } from './domestic-index.js';
 
 // All market data tools available for routing. Built per-instance because
 // get_insider_trades needs the model for its LLM name-resolution fallback.
 function buildMarketDataTools(model: string): StructuredToolInterface[] {
   // China A-share domestic indices are key-free, so they are always bound.
-  const indexTools = [getIndexSnapshot, getIndexSnapshots, getIndexPrices];
+  const indexTools = [getIndexSnapshot, getIndexSnapshots, getIndexPrices, getIndexValuation];
 
   // U.S. equities/crypto go through financialdatasets.ai and require the API
   // key; without it they fail on every call, so they are never bound.
@@ -168,6 +170,7 @@ Given a user's natural language query about market data, call the appropriate to
    - For a single China A-share domestic index quote (上证综指, 深证成指, 沪深300, 中证500, 科创50, 中证1000, etc.) → get_index_snapshot
    - For "今天A股主要指数 / 大盘概览" or an overview of major China indices → get_index_snapshots
    - For China domestic index history, trend or range performance (日/周/月 K线) → get_index_prices
+   - For China domestic index valuation (PE/PB/股息率、历史分位、高估低估) → get_index_valuation
    - A-share / China domestic indices MUST use the get_index_* tools, NEVER get_stock_price (which only covers US equities).
 
 3. **Efficiency**:
@@ -219,6 +222,7 @@ Given a user's natural language query about market data, call the appropriate to
    - For a single China A-share domestic index quote (上证综指, 深证成指, 沪深300, 中证500, 科创50, 中证1000, etc.) → get_index_snapshot
    - For "今天A股主要指数 / 大盘概览" or an overview of major China indices → get_index_snapshots
    - For China domestic index history, trend or range performance (日/周/月 K线) → get_index_prices
+   - For China domestic index valuation (PE/PB/股息率、历史分位、高估低估) → get_index_valuation
    - A-share / China domestic indices MUST use the get_index_* tools, NEVER get_stock_price (which only covers US equities).
 
 4. **Efficiency**:
@@ -249,7 +253,7 @@ export function createGetMarketData(model: string): DynamicStructuredTool {
       ? `Intelligent meta-tool for retrieving market data including prices, news, and insider activity. Takes a natural language query and automatically routes to appropriate market data tools. Use for:
 - Current and historical stock prices
 - Current and historical cryptocurrency prices
-- China A-share domestic index quotes and historical prices
+- China A-share domestic index quotes, historical prices, and valuation (PE/PB/股息率、历史分位)
 - Stock and crypto ticker lookup
 - Company news and recent headlines
 - Broad market news (omit ticker)
@@ -259,7 +263,8 @@ export function createGetMarketData(model: string): DynamicStructuredTool {
 - Beneficial ownership and activist stakes (SEC 13D/13G)`
       : `Intelligent meta-tool for retrieving China A-share domestic index data. Takes a natural language query and automatically routes to appropriate index tools. Use for:
 - China A-share domestic index quotes (实时快照、批量概览)
-- China A-share domestic index historical prices (日/周/月 K线)`,
+- China A-share domestic index historical prices (日/周/月 K线)
+- China A-share domestic index valuation (PE/PB/股息率、历史分位)`,
     schema: GetMarketDataInputSchema,
     func: async (input, _runManager, config?: RunnableConfig) => {
       const onProgress = config?.metadata?.onProgress as ((msg: string) => void) | undefined;

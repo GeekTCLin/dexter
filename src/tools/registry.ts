@@ -1,5 +1,6 @@
 import { StructuredToolInterface } from '@langchain/core/tools';
-import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks } from './finance/index.js';
+import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks, getFundQuotes, getFundNav, getFundHoldings, getFundRankings, getFundProfile, FUND_QUOTES_DESCRIPTION, FUND_NAV_DESCRIPTION, FUND_HOLDINGS_DESCRIPTION, FUND_RANKINGS_DESCRIPTION, FUND_PROFILE_DESCRIPTION } from './finance/index.js';
+import { getMarketBreadth, getMarginData, getIndexEtfMap, getIndexConstituents, getIndustryBoards, MARKET_BREADTH_DESCRIPTION, MARGIN_DATA_DESCRIPTION, INDEX_ETF_MAP_DESCRIPTION, INDEX_CONSTITUENTS_DESCRIPTION, INDUSTRY_BOARDS_DESCRIPTION } from './finance/index.js';
 import { exaSearch, tavilySearch, langSearch, bingSearch, baiduSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION, domesticSearchTool, DOMESTIC_SEARCH_DESCRIPTION } from './search/index.js';
 import { createWebSearchTool, type WebSearchProvider } from './search/web-search.js';
 import { getSetting } from '../utils/config.js';
@@ -243,6 +244,86 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       description: DOMESTIC_SEARCH_DESCRIPTION,
       compactDescription: 'China A-share flash news, Guba retail sentiment, keyword news, and official CNINFO announcements (no key).',
       concurrencySafe: false,
+    });
+  }
+
+  // China domestic fund/ETF data needs no key, so it is enabled by default;
+  // FUND_TOOLS_DISABLED=1 opts out.
+  if (process.env.FUND_TOOLS_DISABLED !== '1') {
+    tools.push({
+      name: 'get_fund_quotes',
+      tool: getFundQuotes,
+      description: FUND_QUOTES_DESCRIPTION,
+      compactDescription: 'China domestic fund/ETF latest NAV, and exchange price for ETFs (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_fund_nav',
+      tool: getFundNav,
+      description: FUND_NAV_DESCRIPTION,
+      compactDescription: 'China domestic fund/ETF historical NAV series over a date range (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_fund_holdings',
+      tool: getFundHoldings,
+      description: FUND_HOLDINGS_DESCRIPTION,
+      compactDescription: "China fund disclosed top holdings (前十大重仓股) with weights and position changes (no key).",
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_fund_rankings',
+      tool: getFundRankings,
+      description: FUND_RANKINGS_DESCRIPTION,
+      compactDescription: 'China fund performance rankings by return period and fund type, with 近1月/近1年/近3年 etc (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_fund_profile',
+      tool: getFundProfile,
+      description: FUND_PROFILE_DESCRIPTION,
+      compactDescription: 'China fund basic profile: company (基金公司), manager (基金经理), type and latest NAV (no key).',
+      concurrencySafe: true,
+    });
+  }
+
+  // China domestic market-wide data (breadth, margin, index→ETF mapping) needs
+  // no key, so it is enabled by default; DOMESTIC_MARKET_DISABLED=1 opts out.
+  if (process.env.DOMESTIC_MARKET_DISABLED !== '1') {
+    tools.push({
+      name: 'get_market_breadth',
+      tool: getMarketBreadth,
+      description: MARKET_BREADTH_DESCRIPTION,
+      compactDescription: 'China A-share whole-market breadth: 涨跌家数, 涨停/跌停家数, 两市成交额 (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_margin_data',
+      tool: getMarginData,
+      description: MARGIN_DATA_DESCRIPTION,
+      compactDescription: 'China A-share margin financing (两融): 融资余额, 融资净买入, 融券余额 (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_index_etf_map',
+      tool: getIndexEtfMap,
+      description: INDEX_ETF_MAP_DESCRIPTION,
+      compactDescription: 'Maps a China index (e.g. 沪深300) to its tracking ETFs with code, name and company (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_index_constituents',
+      tool: getIndexConstituents,
+      description: INDEX_CONSTITUENTS_DESCRIPTION,
+      compactDescription: 'China index constituents (成分股) with name and latest price (no weights) (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_industry_boards',
+      tool: getIndustryBoards,
+      description: INDUSTRY_BOARDS_DESCRIPTION,
+      compactDescription: 'China industry board list (行业板块) with 涨跌幅/上涨下跌家数/领涨股, or a board’s member stocks (no key).',
+      concurrencySafe: true,
     });
   }
 
