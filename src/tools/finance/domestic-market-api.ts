@@ -135,7 +135,7 @@ function toStringOrNull(value: unknown): string | null {
 
 // Today's date (Asia/Shanghai) as YYYY-MM-DD; the ZT/DT pools are keyed by
 // trading day, so the caller's clock timezone must not leak in.
-function shanghaiDate(d = new Date()): string {
+export function shanghaiDate(d = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',

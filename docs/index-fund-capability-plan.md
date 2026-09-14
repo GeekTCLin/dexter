@@ -1,7 +1,7 @@
 # 指数与基金能力增强评估（含 UZI-Skill / finskills / quantskills 借鉴）
 
 - 文档版本：v1.1（在原路线图基础上扩展）
-- 状态：评估与规划 + 实现进展（P0-P2 已落地并验证；扩展项 E1/E2/E3 已落地并验证；其余扩展项规划中）
+- 状态：评估与规划 + 实现进展（P0-P2 已落地并验证；扩展项 E1-E10 已全部落地并验证）
 - 目标读者：Dexter 维护者 / 实现工程师
 - 关联代码：`src/tools/finance/`、`src/tools/search/`、`src/tools/registry.ts`、`src/skills/`
 - 关联文档：`docs/domestic-index-data-integration.md`（指数数据接入设计基线）
@@ -37,7 +37,7 @@
 
 ### 1.4 实现进展（v1.1 更新）
 
-原 P0-P2 计划以及扩展项 E1/E2/E3 均已实现并通过验证（`bunx tsc --noEmit` 退出码 0；`bun test` 414 pass / 7 skip / 0 fail）。已落地能力如下，均可 keyless 使用，并复用既有「熔断 3 次/45s + 分层缓存 + GBK 解码 + `formatToolResult`」范式：
+原 P0-P2 计划以及扩展项 E1-E10 均已实现并通过验证（`bunx tsc --noEmit` 退出码 0；`bun test` 444 pass / 7 skip / 0 fail）。已落地能力如下，均可 keyless 使用，并复用既有「熔断 3 次/45s + 分层缓存 + GBK 解码 + `formatToolResult`」范式：
 
 | 阶段 | 交付 | 工具 / 技能 | 状态 |
 |---|---|---|---|
@@ -52,10 +52,17 @@
 | E3 | 真实成分权重 | `index-weights-api.ts`（中证官方 `closeweight.xls`，SheetJS 解析；非中证代码回退东财并标注无权重） | 已完成 |
 | E1 | ETF 折溢价 | `get_fund_quotes` 新增**折溢价率**列（(场内价−净值)/净值；东财未暴露 IOPV，故为净值口径） | 已完成 |
 | E2 | 指数调样事件 | skill `index-rebalance-event-study`（成分 + `domestic_search` 公告 + ETF 映射） | 已完成 |
+| E8 | ETF 评价/横向比较 | `get_etf_evaluation`（规模 push2 `f20` + 日均成交/流动性 + 年化跟踪误差/累计偏离/相关性 + 折溢价 + 费率/跟踪标的；`etf-eval-api.ts`） | 已完成 |
+| E9 | 资产配置/核心-卫星 | `get_asset_allocation`（规则化股债基准 + PE 分位逆向倾斜 + 核心/卫星拆分 + 各仓位示例 ETF；`asset-allocation.ts`） | 已完成 |
+| E4 | 指数/行业估值轮动 | `get_valuation_rotation`（宽基 + 中证全指行业指数按 PE 分位升序，轮动线索；`rotation.ts` + skill `index-valuation-rotation`） | 已完成 |
+| E5 | 市场参与度/拥挤度 | `get_market_crowding`（广度参与度标签 + 涨停/两融占比拥挤度评分；`market-crowding.ts`） | 已完成 |
+| E6 | 概念题材轮动 | `get_concept_boards`（东财概念板块 `clist` `fs=m:90+t:3`，可下钻成分；`concept.ts` + `industry-api.ts`） | 已完成 |
+| E7 | 市场状态识别（regime） | `get_market_regime`（指数 MA 趋势 + PE 分位 + 拥挤度 + PMI 合成 risk-on/neutral/risk-off；`regime.ts`） | 已完成 |
+| E10 | 龙虎榜 / 涨停池 | `get_dragon_tiger`（龙虎榜净买入个股 + 活跃营业部/游资席位）、`get_limit_up_pool`（涨停池连板/封单/炸板；`dragon-tiger-api.ts`） | 已完成 |
 | P2 | 行业板块 | `get_industry_boards`（东财行业板块，可下钻到板块成分） | 已完成 |
 | P2 | 基金筛选/排行 | `get_fund_rankings`（按周期与类型排行） | 已完成 |
 | P2 | 基金公司/经理 | `get_fund_profile`（公司/经理/类型/最新净值） | 已完成 |
-| — | 技能 | `index-valuation`、`index-breadth-review`、`fund-holdings-lookthrough`、`sector-rotation`、`index-rebalance-event-study` | 已完成 |
+| — | 技能 | `index-valuation`、`index-breadth-review`、`fund-holdings-lookthrough`、`sector-rotation`、`index-rebalance-event-study`、`etf-selection`、`asset-allocation`、`index-valuation-rotation` | 已完成 |
 
 开关：`FUND_TOOLS_DISABLED=1`（基金类）、`DOMESTIC_MARKET_DISABLED=1`（广度/两融/ETF 映射/成分/行业）。
 
@@ -70,8 +77,8 @@
 | 指数数据 | `src/tools/finance/domestic-index-api.ts` | `INDEX_CATALOG` 已扩至 19 个；东财主源 + 腾讯兜底；30s 快照缓存；熔断 3 次/45s；`decodeGbk` 已导出；`getIndexSnapshot/Snapshots/Bars` |
 | 指数工具 | `src/tools/finance/domestic-index.ts` | `get_index_snapshot`、`get_index_snapshots`、`get_index_prices`、`get_index_valuation` |
 | 指数成分/权重 | `src/tools/finance/index-constituents-api.ts`、`index-weights-api.ts` | 成分（东财 `RPT_INDEX_COMPONENT`）+ 权重（中证 `closeweight.xls`，`xlsx`/SheetJS 解析）；熔断 + 24h 缓存 |
-| 市场/行业 | `src/tools/finance/domestic-market-api.ts`、`industry-api.ts` | 广度（`ulist.np` f104/f105/f106）、两融（`RPTA_RZRQ_LSHJ`）、行业板块（`clist` + GBK） |
-| 基金 | `src/tools/finance/domestic-fund-api.ts`、`fund-rank-api.ts`、`fund-profile-api.ts` | 净值/行情含**折溢价率**（`fundmobapi`）、持仓（`FundMNInverstPosition`）、排行（`rankhandler`，GBK）、画像（`FundSearchAPI`） |
+| 市场/行业 | `src/tools/finance/domestic-market-api.ts`、`industry-api.ts`、`concept.ts`、`market-crowding.ts`、`dragon-tiger-api.ts`、`regime.ts` | 广度（`ulist.np` f104/f105/f106）、两融（`RPTA_RZRQ_LSHJ`）、行业板块与概念题材（`clist` + GBK；概念 `fs=m:90+t:3`）、参与度/拥挤度聚合、龙虎榜/涨停池（`RPT_DAILYBILLBOARD_DETAILSNEW`/`RPT_OPERATEDEPT_TRADE`/`getTopicZTPool`）、市场状态（指数 MA + PE 分位 + PMI `RPT_ECONOMY_PMI`） |
+| 基金 | `src/tools/finance/domestic-fund-api.ts`、`fund-rank-api.ts`、`fund-profile-api.ts`、`etf-eval-api.ts`、`asset-allocation.ts` | 净值/行情含**折溢价率**（`fundmobapi`）、持仓（`FundMNInverstPosition`）、排行（`rankhandler`，GBK）、画像（`FundSearchAPI`）；ETF 评价（规模 push2 `f20`、流动性 kline、跟踪误差对标的指数净值序列、费率 `jbgk`）、股债/核心-卫星配置模型；指数/行业估值轮动（`rotation.ts`），全部 keyless |
 | 路由 | `src/tools/finance/get-market-data.ts` | 无 key 时 `buildMarketDataTools` 只绑指数：`buildMarketDataTools`(:109-138)；两套描述 `GET_MARKET_DATA_DESCRIPTION[_INDEX_ONLY]`(:16-89) |
 | 格式化 | `src/tools/finance/formatters.ts` | `MARKET_DATA_FORMATTERS` 以**子工具 name 为键**；顶层工具在自身 func 内格式化，不注册 |
 | 顶层注册 | `src/tools/registry.ts` | keyless 工具默认注册；`FUND_TOOLS_DISABLED`/`DOMESTIC_MARKET_DISABLED` 可关 |
@@ -132,23 +139,23 @@
 | P2 | 真实成分权重 | 加权/集中度分析 | 中 | 中证官方 `closeweight.xls`（SheetJS 解析） | 已完成 |
 | P2 | ETF 折溢价 / IOPV / 份额 | ETF 特有信号 | 中 | 东财 ETF 行情 + 交易所 IOPV | 已完成（折溢价率；IOPV/份额待补） |
 | P2 | 指数调样事件研究 | 调样前后事件收益 | 中 | 中证/国证公告 + `domestic_search` | 已完成（skill） |
-| P3 | 指数估值轮动（行业相对估值） | 轮动线索 | 中 | 中证行业指数估值 | **扩展项 E4** |
-| P3 | 市场参与度/拥挤度 | 情绪与拥挤风险 | 中 | 两融 + 成交额 + 换手（已有底层） | **扩展项 E5** |
-| P3 | 概念题材轮动 | 主题热度 | 中 | 东财概念板块 `clist` | **扩展项 E6** |
-| P3 | 市场状态识别（regime） | 择时/配置前置 | 高 | 指数 + 宏观（LPR/PMI/社融） | **扩展项 E7** |
+| P3 | 指数估值轮动（行业相对估值） | 轮动线索 | 中 | 中证行业指数估值 | 已完成（扩展项 E4，`get_valuation_rotation`） |
+| P3 | 市场参与度/拥挤度 | 情绪与拥挤风险 | 中 | 两融 + 成交额 + 换手（已有底层） | 已完成（扩展项 E5，`get_market_crowding`） |
+| P3 | 概念题材轮动 | 主题热度 | 中 | 东财概念板块 `clist` | 已完成（扩展项 E6，`get_concept_boards`） |
+| P3 | 市场状态识别（regime） | 择时/配置前置 | 高 | 指数 + 宏观（PMI；LPR/社融无源） | 已完成（扩展项 E7，`get_market_regime`） |
 
 ### 4.2 基金线
 
 | 优先级 | 功能 | 价值 | 成本 | 数据源（已/待验证） | 状态 |
 |---|---|---|---|---|---|
 | P0 | 基金/ETF 行情与净值 | 基金分析底座 | 中 | `fundmobapi` + `f10/lsjz` | 已完成 |
-| P0 | ETF 折溢价 / IOPV / 份额变化 | ETF 特有信号 | 中 | 东财 ETF 行情、交易所 IOPV | 已完成（折溢价率；IOPV/份额待补） |
+| P0 | ETF 折溢价 / IOPV / 份额变化 | ETF 特有信号 | 中 | 东财 ETF 行情、交易所 IOPV | 已完成（折溢价率 + 规模已入 ETF 评价；IOPV 东财无源） |
 | P1 | 基金持仓穿透 | 高信息量，UZI 已验证需求 | 中 | `FundMNInverstPosition` | 已完成 |
 | P1 | 基金筛选与排行 | 选基入口 | 中 | `rankhandler` | 已完成（可加深：回撤/夏普/规模/费率） |
 | P1 | 指数 → ETF 映射 | 连接指数与基金两线 | 低 | `FundSearchAPI` | 已完成 |
 | P2 | 基金公司/经理画像 | 主动基金 | 中 | `FundSearchAPI`（`FundBaseInfo`） | 已完成（简版） |
-| P3 | 基金评价（同指数横向比较/跟踪误差/流动性） | 选基决策 | 中 | ETF 行情 + 净值序列 | **扩展项 E8** |
-| P3 | 资产配置（股债/核心-卫星 ETF） | 配置方案 | 中 | 指数估值 + 基金筛选 | **扩展项 E9** |
+| P3 | 基金评价（同指数横向比较/跟踪误差/流动性） | 选基决策 | 中 | ETF 行情 + 净值序列 | 已完成（扩展项 E8，`get_etf_evaluation`） |
+| P3 | 资产配置（股债/核心-卫星 ETF） | 配置方案 | 中 | 指数估值 + 基金筛选 | 已完成（扩展项 E9，`get_asset_allocation`） |
 
 ---
 
@@ -162,16 +169,16 @@ Skill 目录约定：`src/skills/<name>/SKILL.md`（内置）或 `.dexter/skills
 | `index-breadth-review` | "今天大盘怎么样 / 市场情绪" | `get_market_breadth`、`get_margin_data`、`domestic_search(flash)` | UZI `screen.py` | 已完成 |
 | `sector-rotation` | "现在该配哪个行业 / 行业轮动" | `get_industry_boards`、`get_market_breadth`、`get_margin_data` | finskills `sector-rotation-detector` | 已完成（简版） |
 | `fund-holdings-lookthrough` | "基金经理最新重仓 / 抄作业" | `get_fund_holdings`、`get_fund_quotes`、`get_index_etf_map` | UZI `fetch_fund_holders.py` | 已完成 |
-| `etf-selection` | "选哪只 ETF / 哪些 ETF 跟踪沪深300" | `get_fund_quotes`、`get_index_etf_map`、`get_index_valuation` | 自建 + quantskills `etf-fund-evaluator` | 待建（扩展 E8） |
+| `etf-selection` | "选哪只 ETF / 哪些 ETF 跟踪沪深300" | `get_etf_evaluation`、`get_fund_quotes`、`get_index_etf_map`、`get_index_valuation` | 自建 + quantskills `etf-fund-evaluator` | 已完成（扩展 E8） |
 | `fund-deep-dive` | "分析这只基金" | `get_fund_quotes`、`get_fund_holdings`、`get_fund_rankings` | UZI 基金面板 | 待建 |
 | `etf-arbitrage-monitor` | "ETF 折溢价 / 套利空间" | `get_fund_quotes`（折溢价率）+ `get_index_etf_map` | quantskills `etf-arbitrage-monitor` | 待建（折溢价数据已就绪） |
 | `index-rebalance-event-study` | "指数调样影响 / 纳入剔除" | `get_index_constituents` + `domestic_search` + `get_index_etf_map` | quantskills `index-rebalance-event-study` | 已完成 |
-| `index-valuation-rotation` | "指数/行业相对估值与轮动" | `get_index_valuation` + 行业估值 | quantskills `index-valuation-rotation` | 待建（扩展 E4） |
+| `index-valuation-rotation` | "指数/行业相对估值与轮动" | `get_valuation_rotation`、`get_index_valuation` | quantskills `index-valuation-rotation` | 已完成（扩展 E4） |
 | `northbound-flow` | "北向资金在买什么" | —（北向已停披露） | UZI / finskills | **改为两融口径，并入 `index-breadth-review`** |
-| `asset-allocation` | "怎么配置 / 股债比例" | 指数估值 + 基金筛选 | finskills `risk-adjusted-return-optimizer` | 待建（扩展 E9） |
+| `asset-allocation` | "怎么配置 / 股债比例" | `get_asset_allocation`、`get_index_valuation`、`get_etf_evaluation` | finskills `risk-adjusted-return-optimizer` | 已完成（扩展 E9） |
 | `index-report`（可选） | "生成指数/基金报告" | 复用 `write-memo` 的 HTML 输出 | UZI HTML 渲染 + finskills `output-template.md` | 可选 |
 
-> 已落 5 个：`index-valuation`、`index-breadth-review`、`sector-rotation`、`fund-holdings-lookthrough`、`index-rebalance-event-study`。
+> 已落 8 个：`index-valuation`、`index-breadth-review`、`sector-rotation`、`fund-holdings-lookthrough`、`index-rebalance-event-study`、`etf-selection`、`asset-allocation`、`index-valuation-rotation`。
 
 ---
 
@@ -179,7 +186,7 @@ Skill 目录约定：`src/skills/<name>/SKILL.md`（内置）或 `.dexter/skills
 
 1. **工具层**
    - 指数：`domestic-index-api.ts` 已放宽 catalog / secid 解析；已新增 `domestic-index-valuation-api.ts`；顶层工具在 `formatters.ts` 内自带格式化。
-   - 市场/行业：`domestic-market-api.ts`、`industry-api.ts`（东财 + GBK + 熔断 + 缓存）。
+   - 市场/行业：`domestic-market-api.ts`、`industry-api.ts`、`concept.ts`、`market-crowding.ts`、`dragon-tiger-api.ts`、`regime.ts`（东财 + GBK + 熔断 + 缓存）。
    - 基金：`domestic-fund-api.ts`、`fund-rank-api.ts`、`fund-profile-api.ts`。
    - 复用现值：`fetchWithTimeout`、熔断（3 次/45s）、`TTL_15M/1H/24H`、`decodeGbk`、`formatToolResult`。
 2. **注册层**（`src/tools/registry.ts`）
@@ -216,18 +223,18 @@ Skill 目录约定：`src/skills/<name>/SKILL.md`（内置）或 `.dexter/skills
 
 | 编号 | 扩展项 | 价值 | 成本 | 数据源 | 依赖现状 | 归属阶段 |
 |---|---|---|---|---|---|---|
-| **E1** | ETF 折溢价 / IOPV / 份额监控 | ETF 特有信号，套利与情绪 | 中 | 东财 ETF 行情 + 交易所 IOPV | 已有 `get_fund_quotes` 场内价，补 IOPV/折溢价即可 | 已完成（折溢价率） |
+| **E1** | ETF 折溢价 / IOPV / 份额监控 | ETF 特有信号，套利与情绪 | 中 | 东财 ETF 行情 + 交易所 IOPV | 已有 `get_fund_quotes` 场内价，补 IOPV/折溢价即可 | 已完成（折溢价率 + 规模；IOPV 无源） |
 | **E2** | 指数调样事件研究 | 调样前后事件收益 | 中 | 中证/国证公告 + `domestic_search` | 已有 `get_index_constituents` 可做前后对比 | 已完成 |
 | **E3** | 真实成分权重 | 加权/集中度分析 | 中 | 中证官方 `closeweight.xls`（SheetJS） | 已有 `get_index_constituents`，补权重字段 | 已完成 |
-| **E4** | 指数估值轮动 / 行业相对估值 | 轮动线索 | 中 | 中证行业指数估值 + 蛋卷 | 已有 `get_index_valuation`，扩到行业指数 | P3 |
-| **E5** | 市场参与度 / 拥挤度 | 情绪与拥挤风险 | 中 | 两融 + 成交额 + 换手 | 已有 `get_market_breadth` + `get_margin_data` | P3 |
-| **E6** | 概念题材轮动 | 主题热度 | 中 | 东财概念板块 `clist` | 复用 `industry-api` 的 `clist` 范式（`fs=m:90+t:3`） | P3 |
-| **E7** | 市场状态识别（regime） | 择时/配置前置 | 高 | 指数 + 宏观（LPR/PMI/社融） | 需新增宏观数据工具 | P3 |
-| **E8** | ETF 评价（横向比较/跟踪误差/流动性） | 选基决策 | 中 | ETF 行情 + 净值序列 | 已有 `get_fund_quotes`/`get_fund_nav`/`get_index_etf_map` | P3 |
-| **E9** | 资产配置（股债/核心-卫星 ETF） | 配置方案 | 中 | 指数估值 + 基金筛选 | 已有估值/筛选/映射，补配置模型 | P3 |
-| **E10** | 龙虎榜 / 游资（借 UZI） | 短线资金 | 中 | 东财 `ZTPool`/龙虎榜接口 | 已有 `ZTPool` 范式 | P3 |
+| **E4** | 指数估值轮动 / 行业相对估值 | 轮动线索 | 中 | 中证行业指数估值 + 蛋卷 | 已有 `get_index_valuation`，扩到行业指数 | 已完成（`get_valuation_rotation` + `index-valuation-rotation` skill） |
+| **E5** | 市场参与度 / 拥挤度 | 情绪与拥挤风险 | 中 | 两融 + 成交额 + 换手 | 已有 `get_market_breadth` + `get_margin_data` | 已完成（`get_market_crowding`） |
+| **E6** | 概念题材轮动 | 主题热度 | 中 | 东财概念板块 `clist` | 复用 `industry-api` 的 `clist` 范式（`fs=m:90+t:3`） | 已完成（`get_concept_boards`） |
+| **E7** | 市场状态识别（regime） | 择时/配置前置 | 高 | 指数 + 宏观（PMI） | 需新增宏观数据工具（LPR/社融东财无源，以 PMI 代理） | 已完成（`get_market_regime`） |
+| **E8** | ETF 评价（横向比较/跟踪误差/流动性） | 选基决策 | 中 | ETF 行情 + 净值序列 | 已有 `get_fund_quotes`/`get_fund_nav`/`get_index_etf_map` | 已完成（`get_etf_evaluation` + `etf-selection`） |
+| **E9** | 资产配置（股债/核心-卫星 ETF） | 配置方案 | 中 | 指数估值 + 基金筛选 | 已有估值/筛选/映射，补配置模型 | 已完成（`get_asset_allocation` + `asset-allocation` skill） |
+| **E10** | 龙虎榜 / 游资（借 UZI） | 短线资金 | 中 | 东财 `ZTPool`/龙虎榜接口 | 已有 `ZTPool` 范式 | 已完成（`get_dragon_tiger` + `get_limit_up_pool`） |
 
-**落地进展**：E3（真实成分权重，中证 `closeweight.xls` + SheetJS）→ E1（ETF 折溢价率）→ E2（调样事件 skill）均**已完成**。**后续建议顺序**：E8/E9（选基与配置）→ E5/E6/E4 → E7/E10。
+**落地进展**：E3（真实成分权重，中证 `closeweight.xls` + SheetJS）→ E1（ETF 折溢价率）→ E2（调样事件 skill）→ E8（ETF 评价 `get_etf_evaluation` + `etf-selection` skill）→ E9（资产配置 `get_asset_allocation` + `asset-allocation` skill）→ E5（市场参与度/拥挤度 `get_market_crowding`）→ E6（概念题材 `get_concept_boards`）→ E4（估值轮动 `get_valuation_rotation` + `index-valuation-rotation` skill）→ E7（市场状态 `get_market_regime`）→ E10（龙虎榜 `get_dragon_tiger` + `get_limit_up_pool`）均**已完成**。**E1-E10 已全部交付**，后续进入维护与加深（如 IOPV/份额、回撤/夏普、报告模板）。
 
 ---
 
@@ -248,28 +255,28 @@ Skill 目录约定：`src/skills/<name>/SKILL.md`（内置）或 `.dexter/skills
 |---|---|---|---|
 | UZI `fetch_capital_flow.py` | 北向资金 20 日净买入 | `get_margin_data`（两融替代） | 已替换 |
 | UZI `fetch_fund_holders.py` / `fund_holdings_runner.py` | 基金持仓、经理、NAV、夏普 | `get_fund_holdings` + `fund-holdings-lookthrough` | 已完成 |
-| UZI `skills/lhb-analyzer/` | 龙虎榜席位识别 | 扩展项 E10 | 待建 |
+| UZI `skills/lhb-analyzer/` | 龙虎榜席位识别 | `get_dragon_tiger`（扩展项 E10） | 已完成 |
 | UZI `screen.py`（板块宽度） | 市场广度 | `get_market_breadth` | 已完成 |
 | UZI HTML 渲染器 | 报告样式 | `index-report` skill（复用 `write-memo`） | 可选 |
 | finskills `sector-rotation-detector/` | 宏观驱动行业轮动方法论 | `sector-rotation` skill | 已完成（简版） |
-| finskills `risk-adjusted-return-optimizer/` | 资产配置框架 | 扩展项 E9 | 待建 |
+| finskills `risk-adjusted-return-optimizer/` | 资产配置框架 | `get_asset_allocation` + `asset-allocation` skill（扩展项 E9） | 已完成 |
 | finskills `high-dividend-strategy/` | 红利可持续性分析 | 并入 `index-valuation`（红利指数已入 catalog） | 部分 |
 | finskills `findata-toolkit-cn/scripts/*` | AKShare 取数清单 | 工具数据源候选 | 参考 |
 | quantskills `skill-etf-arbitrage-monitor` | ETF 折溢价/申赎可行性 | 折溢价率已实现（E1）；申赎可行性待建 | 部分 |
-| quantskills `skill-etf-fund-evaluator` | ETF 同指数横向比较 | 扩展项 E8 + `etf-selection` | 待建 |
+| quantskills `skill-etf-fund-evaluator` | ETF 同指数横向比较 | `get_etf_evaluation` + `etf-selection` skill（扩展项 E8） | 已完成 |
 | quantskills `skill-index-rebalance-event-study` | 指数调样事件研究 | `index-rebalance-event-study` skill（E2） | 已完成 |
-| quantskills `skill-index-valuation-rotation` | 指数估值分位 + 行业相对估值 | `index-valuation`（已覆盖分位）+ 扩展项 E4 | 部分 |
-| quantskills `skill-a-share-market-participation` | 市场广度/参与度/拥挤度 | `get_market_breadth` + 扩展项 E5 | 部分 |
-| quantskills `skill-capital-flow-crowding-monitor` | 融资融券/北向/大宗资金一致性 | `get_margin_data` + 扩展项 E5 | 部分 |
+| quantskills `skill-index-valuation-rotation` | 指数估值分位 + 行业相对估值 | `index-valuation`（已覆盖分位）+ `get_valuation_rotation`（扩展项 E4） | 已完成 |
+| quantskills `skill-a-share-market-participation` | 市场广度/参与度/拥挤度 | `get_market_breadth` + `get_market_crowding`（扩展项 E5） | 已完成 |
+| quantskills `skill-capital-flow-crowding-monitor` | 融资融券/北向/大宗资金一致性 | `get_margin_data` + `get_market_crowding`（扩展项 E5） | 部分（北向已停披露，以两融代理） |
 | quantskills `skill-northbound-margin-monitor` | 北向+两融+期货风险信号 | `get_margin_data`（北向不可用） | 部分 |
-| quantskills `skill-b6-limitup-pool` | 涨停池/连板/情绪指标 | 扩展项 E10（`ZTPool` 已有底层） | 待建 |
+| quantskills `skill-b6-limitup-pool` | 涨停池/连板/情绪指标 | `get_limit_up_pool`（扩展项 E10） | 已完成 |
 | quantskills `skill-dividend-yield-scan` | 滚动股息率/连续分红/除权日历 | 并入 `index-valuation` / 红利线 | 部分 |
-| quantskills `skill-concept-rotation-monitor` | 概念题材动量/宽度/轮动 | 扩展项 E6 | 待建 |
-| quantskills `skill-market-regime-analysis` | 指数+宏观+波动率市场状态 | 扩展项 E7 | 待建 |
+| quantskills `skill-concept-rotation-monitor` | 概念题材动量/宽度/轮动 | `get_concept_boards`（扩展项 E6，动量/宽度尚需二次加工） | 部分 |
+| quantskills `skill-market-regime-analysis` | 指数+宏观+波动率市场状态 | `get_market_regime`（扩展项 E7） | 已完成 |
 | `simonlin1212/a-stock-data` | 中证/国证成分、权重、估值 | 中证 `closeweight.xls` + SheetJS（E3） | 已完成 |
 
 ---
 
 ## 10. 一句话结论
 
-原 P0-P2 已全部落地（指数估值/成分/广度/两融、行业板块、基金净值/持仓/排行/画像 + 5 个 skill），且扩展项 **E3（真实成分权重，中证 `closeweight.xls` + SheetJS）、E1（ETF 折溢价率）、E2（指数调样事件 skill）已完成并验证（`bun test` 414 pass / 7 skip / 0 fail）**；v1.1 共扩展 E1-E10 十个方向，后续建议顺序 E8/E9 → E5/E6/E4 → E7/E10；外部仓库（UZI/finskills/quantskills）均无指数/基金现成实现，继续坚持"取其数据源与方法论、工具与 skill 自建"的策略，并遵守各许可条款。
+原 P0-P2 已全部落地（指数估值/成分/广度/两融、行业板块、基金净值/持仓/排行/画像 + 8 个 skill），且扩展项 **E1（ETF 折溢价率）、E2（指数调样事件 skill）、E3（真实成分权重，中证 `closeweight.xls` + SheetJS）、E4（估值轮动 `get_valuation_rotation` + `index-valuation-rotation` skill）、E5（市场参与度/拥挤度 `get_market_crowding`）、E6（概念题材 `get_concept_boards`）、E7（市场状态 `get_market_regime`）、E8（ETF 评价 `get_etf_evaluation` + `etf-selection` skill）、E9（资产配置 `get_asset_allocation` + `asset-allocation` skill）、E10（龙虎榜 `get_dragon_tiger` + 涨停池 `get_limit_up_pool`）已全部完成并验证（`bun test` 444 pass / 7 skip / 0 fail）**；v1.1 共扩展 E1-E10 十个方向，现已全部交付，后续进入维护与加深；外部仓库（UZI/finskills/quantskills）均无指数/基金现成实现，继续坚持"取其数据源与方法论、工具与 skill 自建"的策略，并遵守各许可条款。

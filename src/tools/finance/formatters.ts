@@ -699,11 +699,13 @@ export function formatIndexConstituents(data: unknown, _args?: Rec): string {
   return lines.join('\n');
 }
 
-export function formatIndustryBoards(data: unknown, _args?: Rec): string {
+export function formatIndustryBoards(data: unknown, args?: Rec): string {
   const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const isConcept = args?.kind === 'concept';
+  const boardKind = isConcept ? 'Concept Board' : 'Industry Board';
   if (rec.kind === 'members') {
     const members = Array.isArray(rec.members) ? (rec.members as Rec[]) : [];
-    const header = `Industry Board ${rec.boardName ?? ''} (${rec.board ?? ''})${rec.total ? ` — ${rec.total} 只` : ''}`.trim();
+    const header = `${boardKind} ${rec.boardName ?? ''} (${rec.board ?? ''})${rec.total ? ` — ${rec.total} 只` : ''}`.trim();
     if (members.length === 0) return `${header}\nNo member stocks available.`;
     const lines = [header, '', '| 代码 | 名称 | 最新价 | 涨跌幅 |', '|------|------|--------|--------|'];
     for (const row of members) {
@@ -714,8 +716,9 @@ export function formatIndustryBoards(data: unknown, _args?: Rec): string {
     return lines.join('\n');
   }
   const boards = Array.isArray(rec.boards) ? (rec.boards as Rec[]) : [];
-  if (boards.length === 0) return 'No industry board data available.';
-  const lines = ['Industry Boards (行业板块)', '', '| 代码 | 名称 | 涨跌幅 | 上涨 | 下跌 | 领涨股 |', '|------|------|--------|------|------|--------|'];
+  if (boards.length === 0) return `No ${isConcept ? 'concept' : 'industry'} board data available.`;
+  const title = isConcept ? 'Concept Boards (概念题材)' : 'Industry Boards (行业板块)';
+  const lines = [title, '', '| 代码 | 名称 | 涨跌幅 | 上涨 | 下跌 | 领涨股 |', '|------|------|--------|------|------|--------|'];
   for (const row of boards) {
     lines.push(
       `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtIndexPct(row.changePercent)} | ${fmtNum(row.up)} | ${fmtNum(row.down)} | ${row.leader ?? row.leaderCode ?? '—'} |`,
@@ -766,6 +769,316 @@ export function formatFundProfile(data: unknown, args?: Rec): string {
     `净值日期: ${rec.navDate ?? '—'}`,
     `数据源: ${rec.source ?? '—'}`,
   ];
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// ETF evaluation formatter (E8: 同指数横向比较 / 跟踪误差 / 流动性)
+// ---------------------------------------------------------------------------
+
+function fmtYi(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (!Number.isFinite(num)) return '—';
+  return `${(num / 1e8).toFixed(2)}亿`;
+}
+
+function fmtPercent2(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (!Number.isFinite(num)) return '—';
+  return `${num.toFixed(2)}%`;
+}
+
+function fmtCorrelation(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (!Number.isFinite(num)) return '—';
+  return num.toFixed(3);
+}
+
+export function formatEtfEvaluation(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const etfs = Array.isArray(rec.etfs) ? (rec.etfs as Rec[]) : [];
+  const label = rec.indexName ? `${rec.indexName} (${rec.indexSymbol ?? '—'})` : `"${rec.query ?? ''}"`;
+  const header = `ETF Evaluation — ${label}`;
+  const window = `窗口: ${rec.startDate ?? '—'} ~ ${rec.endDate ?? '—'} (${rec.windowDays ?? '—'} 天)`;
+  if (etfs.length === 0) return `${header}\n${window}\nNo tracking ETF found.`;
+  const lines = [header, window, ''];
+  lines.push(
+    '| 代码 | 名称 | 公司 | 规模 | 日均成交 | 年化跟踪误差 | 累计跟踪偏离 | 相关性 | 折溢价率 | 管理费 | 托管费 |',
+  );
+  lines.push(
+    '|------|------|------|------|----------|--------------|--------------|--------|----------|--------|--------|',
+  );
+  for (const row of etfs) {
+    lines.push(
+      `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${row.company ?? '—'} | ${fmtYi(row.scale)} | ${fmtYi(row.avgAmount)} | ${fmtPercent2(row.trackingError)} | ${row.trackingDifference === null || row.trackingDifference === undefined ? '—' : fmtIndexPct(row.trackingDifference)} | ${fmtCorrelation(row.correlation)} | ${fmtIndexPct(row.premiumPercent)} | ${fmtPercent2(row.managementFeePercent)} | ${fmtPercent2(row.custodyFeePercent)} |`,
+    );
+  }
+  lines.push('', `涨跌/偏离为区间口径；跟踪误差按日超额收益年化（×√252）计算，共 ${etfs[0]?.dataPoints ?? 0} 个样本点。`);
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Asset allocation formatter (E9: 股债 / 核心-卫星)
+// ---------------------------------------------------------------------------
+
+const RISK_LABELS: Record<string, string> = {
+  conservative: 'conservative（稳健型）',
+  balanced: 'balanced（平衡型）',
+  aggressive: 'aggressive（进取型）',
+};
+
+function fmtWeight(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  if (!Number.isFinite(num)) return '—';
+  return `${num.toFixed(1)}%`;
+}
+
+export function formatAssetAllocation(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const riskLevel = String(rec.riskLevel ?? 'balanced');
+  const sleeves = Array.isArray(rec.sleeves) ? (rec.sleeves as Rec[]) : [];
+  const lines = [`资产配置方案 — ${RISK_LABELS[riskLevel] ?? riskLevel}`];
+
+  const tilt = rec.valuationTiltPercent;
+  const tiltText =
+    tilt === null || tilt === undefined || Number(tilt) === 0
+      ? '0.0pp'
+      : `${Number(tilt) > 0 ? '+' : ''}${Number(tilt).toFixed(1)}pp`;
+  lines.push(
+    `目标仓位: 权益 ${fmtWeight(rec.equityWeightPercent)} / 债券 ${fmtWeight(rec.bondWeightPercent)}` +
+      `（基准权益 ${fmtWeight(rec.baseEquityPercent)}，估值倾斜 ${tiltText}）`,
+  );
+
+  const valuation = (rec.valuation && typeof rec.valuation === 'object' ? rec.valuation : null) as Rec | null;
+  const pctText =
+    valuation && valuation.pePercentile !== null && valuation.pePercentile !== undefined
+      ? `${Number(valuation.pePercentile).toFixed(1)}%`
+      : '—';
+  lines.push(
+    `核心指数: ${rec.coreIndexName ?? '—'}${rec.satelliteIndexName ? ` ｜ 卫星: ${rec.satelliteIndexName}` : ''}`,
+  );
+  lines.push(
+    valuation
+      ? `估值: ${valuation.name ?? ''} PE 分位 ${pctText}（${valuation.evaluation ?? '—'}）`
+      : '估值: 未取到',
+  );
+
+  if (sleeves.length > 0) {
+    lines.push('');
+    lines.push('| 类别 | 权重 | 标的 | ETF代码 | ETF名称 | 规模 |');
+    lines.push('|------|------|------|---------|---------|------|');
+    for (const s of sleeves) {
+      lines.push(
+        `| ${s.label ?? '—'} | ${fmtWeight(s.weightPercent)} | ${s.target ?? '—'} | ${s.etfCode ?? '—'} | ${s.etfName ?? '—'} | ${fmtYi(s.etfScale)} |`,
+      );
+    }
+  }
+
+  const rationale = Array.isArray(rec.rationale) ? (rec.rationale as string[]) : [];
+  if (rationale.length > 0) {
+    lines.push('', '配置逻辑:');
+    for (const r of rationale) lines.push(`- ${r}`);
+  }
+
+  const notes = Array.isArray(rec.notes) ? (rec.notes as string[]) : [];
+  if (notes.length > 0) {
+    lines.push('', '说明:');
+    for (const n of notes) lines.push(`- ${n}`);
+  }
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Market crowding formatter (E5: 参与度 / 拥挤度)
+// ---------------------------------------------------------------------------
+
+const CROWDING_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' };
+const PARTICIPATION_LABELS: Record<string, string> = {
+  'broad-rally': '普涨',
+  strong: '偏强',
+  mixed: '分化',
+  weak: '偏弱',
+  'broad-decline': '普跌',
+};
+
+export function formatMarketCrowding(data: unknown): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const participation = (rec.participation ?? {}) as Rec;
+  const crowding = (rec.crowding ?? {}) as Rec;
+  const margin = (rec.margin ?? null) as Rec | null;
+  const plevel = (participation.level as string) ?? '';
+  const clevel = (crowding.level as string) ?? '';
+  const partLabel = PARTICIPATION_LABELS[plevel] ?? plevel ?? '—';
+  const crowLabel = CROWDING_LABELS[clevel] ?? clevel ?? '—';
+  const ratioChange =
+    margin && margin.ratioChangePp !== null && margin.ratioChangePp !== undefined
+      ? `${(Number(margin.ratioChangePp)).toFixed(2)}pp`
+      : '—';
+
+  const lines: string[] = [];
+  lines.push(`市场参与度 / 拥挤度 — ${rec.tradeDate ?? '—'}`);
+  lines.push('');
+  lines.push(
+    `参与度: ${partLabel}（上涨占比 ${fmtPercent2(rec.advanceRatio)}，上涨 ${rec.up ?? '—'} / 下跌 ${rec.down ?? '—'} / 平盘 ${rec.flat ?? '—'}，共 ${rec.total ?? '—'}）`,
+  );
+  lines.push(
+    `拥挤度: ${crowLabel}（评分 ${crowding.score ?? '—'} / 100；涨停 ${rec.limitUp ?? '—'}（${fmtPercent2(rec.limitUpRatio)}），跌停 ${rec.limitDown ?? '—'}（${fmtPercent2(rec.limitDownRatio)}））`,
+  );
+  lines.push(`两市成交额: ${fmtYi(rec.turnover)}`);
+  lines.push('');
+  if (margin) {
+    lines.push(
+      `两融（${margin.date ?? '—'}）: 融资余额 ${fmtYi(margin.financingBalance)}，融资净买入 ${fmtYi(margin.financingNet)}，融资余额占流通市值 ${fmtPercent2(margin.financingBalanceRatio)}（窗口变化 ${ratioChange}）`,
+    );
+  } else {
+    lines.push('两融数据不可用。');
+  }
+  const notes = Array.isArray(rec.notes) ? (rec.notes as string[]) : [];
+  if (notes.length > 0) {
+    lines.push('');
+    lines.push('提示:');
+    for (const note of notes) lines.push(`- ${note}`);
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Valuation rotation formatter (E4: 指数/行业相对估值轮动)
+// ---------------------------------------------------------------------------
+
+function fmtPlain2(n: unknown): string {
+  if (n === null || n === undefined) return '—';
+  const num = Number(n);
+  return Number.isFinite(num) ? num.toFixed(2) : '—';
+}
+
+export function formatValuationRotation(data: unknown): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const rows = Array.isArray(rec.rows) ? (rec.rows as Rec[]) : [];
+  const header = `估值轮动 — 指数/行业相对估值（${rows.length} 个，按 PE 分位升序）`;
+  if (rows.length === 0) return `${header}\nNo valuation data available for this universe.`;
+  const lines = [header, ''];
+  lines.push('| 代码 | 名称 | PE | PB | PE分位 | PB分位 | 股息率 | 估值状态 |');
+  lines.push('|------|------|----|----|--------|--------|--------|----------|');
+  for (const r of rows) {
+    lines.push(
+      `| ${r.symbol ?? '—'} | ${r.name ?? '—'} | ${fmtPlain2(r.pe)} | ${fmtPlain2(r.pb)} | ${fmtPercent2(r.pePercentile)} | ${fmtPercent2(r.pbPercentile)} | ${fmtPercent2(r.dividendYield)} | ${r.evaluation ?? '—'} |`,
+    );
+  }
+  const cheapest = rows[0];
+  const richest = rows[rows.length - 1];
+  lines.push('');
+  lines.push(
+    `分位最低: ${cheapest.name ?? cheapest.symbol ?? '—'}（PE 分位 ${fmtPercent2(cheapest.pePercentile)}）`,
+  );
+  lines.push(
+    `分位最高: ${richest.name ?? richest.symbol ?? '—'}（PE 分位 ${fmtPercent2(richest.pePercentile)}）`,
+  );
+  lines.push('');
+  lines.push('分位为历史百分位（越低越便宜）；仅供参考，需结合盈利趋势与行业景气度。');
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Dragon-tiger / limit-up formatters (E10: 龙虎榜 / 游资 / 涨停池)
+// ---------------------------------------------------------------------------
+
+export function formatDragonTiger(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const stocks = Array.isArray(rec.stocks) ? (rec.stocks as Rec[]) : [];
+  const seats = Array.isArray(rec.seats) ? (rec.seats as Rec[]) : [];
+  const lines = [`龙虎榜 — ${rec.tradeDate ?? '—'}`];
+
+  if (stocks.length === 0) {
+    lines.push('No dragon-tiger stock data available.');
+  } else {
+    lines.push('', `净买入个股（前 ${stocks.length}）`);
+    lines.push('| 代码 | 名称 | 收盘 | 涨跌幅 | 换手 | 买入 | 卖出 | 净买入 | 上榜原因 |');
+    lines.push('|------|------|------|--------|------|------|------|--------|----------|');
+    for (const row of stocks) {
+      lines.push(
+        `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtPlain2(row.close)} | ${fmtIndexPct(row.changePercent)} | ${fmtPercent2(row.turnoverRate)} | ${fmtYi(row.buyAmount)} | ${fmtYi(row.sellAmount)} | ${fmtYi(row.netAmount)} | ${row.explanation ?? '—'} |`,
+      );
+    }
+  }
+
+  if (seats.length > 0) {
+    lines.push('', `活跃营业部 / 游资（净买入前 ${seats.length}）`);
+    lines.push('| 营业部 | 买入 | 卖出 | 净买入 | 个股 |');
+    lines.push('|--------|------|------|--------|------|');
+    for (const row of seats) {
+      lines.push(
+        `| ${row.name ?? '—'} | ${fmtYi(row.buyAmount)} | ${fmtYi(row.sellAmount)} | ${fmtYi(row.netAmount)} | ${row.stockName ?? '—'}(${row.stockCode ?? '—'}) |`,
+      );
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export function formatLimitUpPool(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const stocks = Array.isArray(rec.stocks) ? (rec.stocks as Rec[]) : [];
+  const header = `涨停池 — ${rec.tradeDate ?? '—'}（涨停 ${rec.total ?? '—'} 家）`;
+  if (stocks.length === 0) return `${header}\nNo limit-up stock data available.`;
+  const lines = [header, ''];
+  lines.push('| 代码 | 名称 | 价格 | 涨跌幅 | 连板 | 封板时间 | 炸板 | 封单 | 换手 | 行业 |');
+  lines.push('|------|------|------|--------|------|----------|------|------|------|------|');
+  for (const row of stocks) {
+    lines.push(
+      `| ${row.code ?? '—'} | ${row.name ?? '—'} | ${fmtPlain2(row.price)} | ${fmtIndexPct(row.changePercent)} | ${row.limitUpCount ?? '—'} | ${row.firstLimitTime ?? '—'} | ${row.openTimes ?? '—'} | ${fmtYi(row.sealAmount)} | ${fmtPercent2(row.turnoverRate)} | ${row.industry ?? '—'} |`,
+    );
+  }
+  return lines.join('\n');
+}
+
+const REGIME_LABELS: Record<string, string> = {
+  'risk-on': '进攻 (risk-on)',
+  neutral: '中性 (neutral)',
+  'risk-off': '防守 (risk-off)',
+};
+
+const TREND_LABELS: Record<string, string> = {
+  up: '上行',
+  down: '下行',
+  range: '震荡',
+};
+
+export function formatMarketRegime(data: unknown, _args?: Rec): string {
+  const rec = (data && typeof data === 'object' ? data : {}) as Rec;
+  const header = `市场状态 — ${rec.indexName ?? rec.symbol ?? '—'}（${rec.asOf ?? '—'}）`;
+  const regimeLabel = REGIME_LABELS[String(rec.regime)] ?? rec.regime ?? '—';
+  const trendLabel = TREND_LABELS[String(rec.trend)] ?? rec.trend ?? '—';
+  const lines = [
+    header,
+    `结论: ${regimeLabel}（评分 ${rec.score ?? '—'}/100，趋势 ${trendLabel}）`,
+    '',
+    `指数: ${fmtPlain2(rec.price)}  MA20: ${fmtPlain2(rec.ma20)}  MA60: ${fmtPlain2(rec.ma60)}  MA200: ${fmtPlain2(rec.ma200)}`,
+    `估值: PE 分位 ${fmtPercent2(rec.valuationPercentile)}`,
+    `拥挤度: ${CROWDING_LABELS[String(rec.crowdingLevel)] ?? rec.crowdingLevel ?? '—'}`,
+  ];
+  const pmi = (rec.pmi && typeof rec.pmi === 'object' ? rec.pmi : null) as Rec | null;
+  lines.push(
+    pmi
+      ? `PMI: 制造业 ${fmtPlain2(pmi.manufacturing)}，非制造业 ${fmtPlain2(pmi.nonManufacturing)}（${pmi.date ?? '—'}）`
+      : 'PMI: 不可用',
+  );
+
+  const reasons = Array.isArray(rec.reasons) ? rec.reasons : [];
+  if (reasons.length > 0) {
+    lines.push('', '依据:');
+    for (const reason of reasons) lines.push(`- ${reason}`);
+  }
+  const notes = Array.isArray(rec.notes) ? rec.notes : [];
+  if (notes.length > 0) {
+    lines.push('', '提示:');
+    for (const note of notes) lines.push(`- ${note}`);
+  }
   return lines.join('\n');
 }
 

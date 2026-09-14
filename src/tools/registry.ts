@@ -1,6 +1,6 @@
 import { StructuredToolInterface } from '@langchain/core/tools';
-import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks, getFundQuotes, getFundNav, getFundHoldings, getFundRankings, getFundProfile, FUND_QUOTES_DESCRIPTION, FUND_NAV_DESCRIPTION, FUND_HOLDINGS_DESCRIPTION, FUND_RANKINGS_DESCRIPTION, FUND_PROFILE_DESCRIPTION } from './finance/index.js';
-import { getMarketBreadth, getMarginData, getIndexEtfMap, getIndexConstituents, getIndustryBoards, MARKET_BREADTH_DESCRIPTION, MARGIN_DATA_DESCRIPTION, INDEX_ETF_MAP_DESCRIPTION, INDEX_CONSTITUENTS_DESCRIPTION, INDUSTRY_BOARDS_DESCRIPTION } from './finance/index.js';
+import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks, getFundQuotes, getFundNav, getFundHoldings, getFundRankings, getFundProfile, getEtfEvaluation, getAssetAllocation, FUND_QUOTES_DESCRIPTION, FUND_NAV_DESCRIPTION, FUND_HOLDINGS_DESCRIPTION, FUND_RANKINGS_DESCRIPTION, FUND_PROFILE_DESCRIPTION, ETF_EVALUATION_DESCRIPTION, ASSET_ALLOCATION_DESCRIPTION } from './finance/index.js';
+import { getMarketBreadth, getMarginData, getIndexEtfMap, getIndexConstituents, getIndustryBoards, getConceptBoards, getMarketCrowding, getValuationRotation, getDragonTiger, getLimitUpPool, getMarketRegime, MARKET_BREADTH_DESCRIPTION, MARGIN_DATA_DESCRIPTION, INDEX_ETF_MAP_DESCRIPTION, INDEX_CONSTITUENTS_DESCRIPTION, INDUSTRY_BOARDS_DESCRIPTION, CONCEPT_BOARDS_DESCRIPTION, MARKET_CROWDING_DESCRIPTION, VALUATION_ROTATION_DESCRIPTION, DRAGON_TIGER_DESCRIPTION, LIMIT_UP_POOL_DESCRIPTION, MARKET_REGIME_DESCRIPTION } from './finance/index.js';
 import { exaSearch, tavilySearch, langSearch, bingSearch, baiduSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION, domesticSearchTool, DOMESTIC_SEARCH_DESCRIPTION } from './search/index.js';
 import { createWebSearchTool, type WebSearchProvider } from './search/web-search.js';
 import { getSetting } from '../utils/config.js';
@@ -285,6 +285,20 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       compactDescription: 'China fund basic profile: company (基金公司), manager (基金经理), type and latest NAV (no key).',
       concurrencySafe: true,
     });
+    tools.push({
+      name: 'get_etf_evaluation',
+      tool: getEtfEvaluation,
+      description: ETF_EVALUATION_DESCRIPTION,
+      compactDescription: 'Compares index-tracking ETFs on scale, liquidity, tracking error/difference, correlation, premium and fees (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_asset_allocation',
+      tool: getAssetAllocation,
+      description: ASSET_ALLOCATION_DESCRIPTION,
+      compactDescription: 'Rules-based equity/bond + core-satellite allocation plan with valuation tilt and optional ETF picks (no key).',
+      concurrencySafe: true,
+    });
   }
 
   // China domestic market-wide data (breadth, margin, index→ETF mapping) needs
@@ -323,6 +337,48 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       tool: getIndustryBoards,
       description: INDUSTRY_BOARDS_DESCRIPTION,
       compactDescription: 'China industry board list (行业板块) with 涨跌幅/上涨下跌家数/领涨股, or a board’s member stocks (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_concept_boards',
+      tool: getConceptBoards,
+      description: CONCEPT_BOARDS_DESCRIPTION,
+      compactDescription: 'China concept/theme board list (概念题材) with 涨跌幅/上涨下跌家数/领涨股, or a board’s member stocks (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_market_crowding',
+      tool: getMarketCrowding,
+      description: MARKET_CROWDING_DESCRIPTION,
+      compactDescription: 'China A-share participation/crowding: breadth participation label + crowding score from limit-ups and margin-financing ratio (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_valuation_rotation',
+      tool: getValuationRotation,
+      description: VALUATION_ROTATION_DESCRIPTION,
+      compactDescription: 'Ranks China broad-market + 中证全指 industry indices by PE/PB valuation percentile (cheapest first) for rotation clues (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_dragon_tiger',
+      tool: getDragonTiger,
+      description: DRAGON_TIGER_DESCRIPTION,
+      compactDescription: 'China 龙虎榜 daily net-buy ranking + active 营业部/游资 seats (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_limit_up_pool',
+      tool: getLimitUpPool,
+      description: LIMIT_UP_POOL_DESCRIPTION,
+      compactDescription: 'China 涨停池: limit-up stocks with 连板/封单/炸板/换手/行业 (no key).',
+      concurrencySafe: true,
+    });
+    tools.push({
+      name: 'get_market_regime',
+      tool: getMarketRegime,
+      description: MARKET_REGIME_DESCRIPTION,
+      compactDescription: 'China A-share market regime risk-on/neutral/risk-off from trend, valuation, crowding and PMI (no key).',
       concurrencySafe: true,
     });
   }
