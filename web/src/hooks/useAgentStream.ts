@@ -68,9 +68,9 @@ function classifyLifecycleEvent(event: AgentEvent): { label: string; detail?: st
       };
     }
     case "tool_limit": {
-      const p = payload as { warning?: string; blocked: boolean };
+      const p = payload as { warning?: string };
       return {
-        label: p.blocked ? "已达迭代上限" : "工具警告",
+        label: "工具警告",
         detail: p.warning,
       };
     }

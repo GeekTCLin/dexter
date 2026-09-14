@@ -75,6 +75,16 @@ export function ChatLog() {
     finalAnswer ||
     streamingAnswer;
 
+  // A finished assistant turn is committed into `messages`, while its tool calls
+  // live in the timeline. Render that trailing answer below the timeline so the
+  // tool/websearch log stays above the reply instead of being pushed underneath.
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const trailingAssistant =
+    lastMessage && lastMessage.role === "assistant" ? lastMessage : null;
+  const leadingMessages = trailingAssistant
+    ? messages.slice(0, -1)
+    : messages;
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
@@ -112,8 +122,8 @@ export function ChatLog() {
           </div>
         )}
 
-        {/* Rendered messages */}
-        {messages.map((msg) => (
+        {/* Rendered messages (the current turn's answer is rendered after the timeline) */}
+        {leadingMessages.map((msg) => (
           <MessageItem key={msg.id} message={msg} />
         ))}
 
@@ -130,6 +140,11 @@ export function ChatLog() {
             />
           ) : null;
         })}
+
+        {/* Completed turn's answer, kept below its tool calls */}
+        {trailingAssistant && (
+          <MessageItem key={trailingAssistant.id} message={trailingAssistant} />
+        )}
 
         {/* Live thinking */}
         <ThinkingRow />

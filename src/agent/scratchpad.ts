@@ -162,11 +162,13 @@ export class Scratchpad {
       }
     }
 
-    // Check if approaching limit (1 call remaining)
+    // On the last call within the suggested limit (1 call remaining)
     if (currentCount === maxCalls - 1) {
+      const remaining = maxCalls - currentCount;
       return {
         allowed: true,
-        warning: `You are approaching the suggested limit for '${toolName}' (${currentCount + 1}/${maxCalls}). ` +
+        warning: `This is the last '${toolName}' call within the suggested limit ` +
+          `(${currentCount}/${maxCalls} used, ${remaining} remaining). ` +
           `If this doesn't return the needed data, consider trying a different approach.`,
       };
     }
@@ -228,7 +230,7 @@ export class Scratchpad {
     }
 
     const lines = statuses.map(s => {
-      const status = s.callCount >= s.maxCalls
+      const status = s.callCount > s.maxCalls
         ? `${s.callCount} calls (over suggested limit of ${s.maxCalls})`
         : `${s.callCount}/${s.maxCalls} calls`;
       return `- ${s.toolName}: ${status}`;

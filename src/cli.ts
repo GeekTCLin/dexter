@@ -488,7 +488,7 @@ export async function runCli() {
 
   // onEscape is wired after renderSelectionOverlay is defined (below)
 
-  editor.onCtrlC = () => {
+  const handleInterrupt = () => {
     if (modelSelection.isInSelectionFlow()) {
       modelSelection.cancelSelection();
       return;
@@ -504,6 +504,7 @@ export async function runCli() {
     tui.stop();
     process.exit(0);
   };
+  editor.onCtrlC = handleInterrupt;
 
   /**
    * Update component state without rebuilding the tree.
@@ -853,11 +854,20 @@ export async function runCli() {
   refreshError();
 
   tui.start();
+
+  // On Windows (and anywhere Ctrl+C arrives as an OS signal instead of the raw
+  // \x03 key the editor handles) route SIGINT/SIGTERM through the same handler.
+  // Installing a listener suppresses the default termination, so the handler must
+  // actually stop the TUI and exit — otherwise Ctrl+C is ignored and the app
+  // keeps running.
+  process.on('SIGINT', () => editor.onCtrlC?.());
+  process.on('SIGTERM', () => {
+    tui.stop();
+    process.exit(0);
+  });
+
   await new Promise<void>((resolve) => {
-    const finish = () => resolve();
-    process.once('exit', finish);
-    process.once('SIGINT', finish);
-    process.once('SIGTERM', finish);
+    process.once('exit', () => resolve());
   });
 
   workingIndicator.dispose();
